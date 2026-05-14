@@ -14,7 +14,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RELEASE_TARGET: x86_64-unknown-linux-musl
+  BUILD_TARGET: x86_64-unknown-linux-musl
+  RELEASE_ARCHIVE_TARGET: linux-x86_64
   AUR_PACKAGE_NAME: gvm-bin
 
 jobs:
@@ -46,7 +47,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ env.RELEASE_TARGET }}
+          targets: ${{ env.BUILD_TARGET }}
 
       - name: Install system dependencies
         run: |
@@ -54,7 +55,7 @@ jobs:
           sudo apt-get install -y musl-tools
 
       - name: Build release binary
-        run: cargo build --locked --release --target "${RELEASE_TARGET}"
+        run: cargo build --locked --release --target "${BUILD_TARGET}"
 
       - name: Package release archive
         run: |
@@ -62,8 +63,8 @@ jobs:
           mkdir -p dist
           ./scripts/build-release-archive.sh \
             "${{ steps.release_meta.outputs.version }}" \
-            "${RELEASE_TARGET}" \
-            "./target/${RELEASE_TARGET}/release/gvm" \
+            "${RELEASE_ARCHIVE_TARGET}" \
+            "./target/${BUILD_TARGET}/release/gvm" \
             dist
 
       - name: Upload workflow artifact
@@ -134,7 +135,7 @@ jobs:
         run: |
           chmod +x ./scripts/render-aur-package.sh
           VERSION="${{ steps.release_meta.outputs.version }}"
-          ARCHIVE="gvm-${VERSION}-${RELEASE_TARGET}.tar.gz"
+          ARCHIVE="gvm-${VERSION}-${RELEASE_ARCHIVE_TARGET}.tar.gz"
           SHA256="$(cut -d' ' -f1 "dist/${ARCHIVE}.sha256")"
           WORKDIR="$(mktemp -d)"
           trap 'rm -rf "${WORKDIR}"' EXIT INT TERM
@@ -145,18 +146,18 @@ jobs:
             "${AUR_PACKAGE_NAME}" \
             "${VERSION}" \
             "${{ github.repository }}" \
-            "${RELEASE_TARGET}" \
+            "${RELEASE_ARCHIVE_TARGET}" \
             "${SHA256}"
 
           cd "${WORKDIR}/${AUR_PACKAGE_NAME}"
-          if git diff --quiet -- PKGBUILD .SRCINFO; then
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
             echo "AUR package is already up to date"
             exit 0
           fi
 
-          git add PKGBUILD .SRCINFO
           git commit -m "Update to ${VERSION}"
-          git push
+          git push origin HEAD:master
 
       - name: Skip AUR publish
         if: ${{ steps.aur.outputs.enabled != 'true' }}
