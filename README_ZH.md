@@ -12,15 +12,6 @@
 
 </div>
 
-## 为什么选 🔨GVM🔨
-
-| 特性 | 说明 |
-| --- | --- |
-| 官方下载 | 从 Gradle 官方分发服务下载，并校验 SHA-256 |
-| 平滑切换 | 使用稳定的 `~/.gvm/bin/gradle` 入口和 `current` 软链接 |
-| 智能发现 | 自动扫描 Wrapper 缓存、`PATH`、SDKMAN 和常见系统目录 |
-| 更稳妥的安装 | `gvm install` 带进度条，保留中断下载，并支持续传 |
-
 ## 安装
 
 | 方式 | 命令 |
@@ -116,4 +107,3 @@ gvm add --link /opt/gradle-8.13
 
 - `linux-x86_64`
 - `linux-aarch64`
-

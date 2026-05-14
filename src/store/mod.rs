@@ -782,7 +782,7 @@ impl Store {
 
         let progress_bar = match total_bytes {
             Some(total_bytes) => {
-                let bar = ProgressBar::new(total_bytes);
+                let bar = ProgressBar::with_draw_target(Some(total_bytes), ProgressDrawTarget::hidden());
                 bar.set_style(
                     ProgressStyle::with_template(
                         "{spinner:.green} downloading {msg} [{bar:32.cyan/blue}] {bytes}/{total_bytes} {bytes_per_sec} eta {eta}",
@@ -794,14 +794,13 @@ impl Store {
                 bar
             }
             None => {
-                let bar = ProgressBar::new_spinner();
+                let bar = ProgressBar::with_draw_target(None, ProgressDrawTarget::hidden());
                 bar.set_style(
                     ProgressStyle::with_template(
                         "{spinner:.green} downloading {msg} {bytes} {bytes_per_sec}",
                     )
                     .expect("valid spinner progress template"),
                 );
-                bar.enable_steady_tick(Duration::from_millis(100));
                 if starting_bytes > 0 {
                     bar.set_position(starting_bytes);
                 }
@@ -809,8 +808,11 @@ impl Store {
             }
         };
 
-        progress_bar.set_draw_target(draw_target);
         progress_bar.set_message(message);
+        progress_bar.set_draw_target(draw_target);
+        if total_bytes.is_none() {
+            progress_bar.enable_steady_tick(Duration::from_millis(100));
+        }
         progress_bar
     }
 

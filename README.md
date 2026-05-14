@@ -12,15 +12,6 @@
 
 </div>
 
-## Why 🔨GVM🔨
-
-| Feature | Details |
-| --- | --- |
-| Official downloads | Installs Gradle from the official distribution service with SHA-256 verification |
-| Smooth switching | Uses a stable `~/.gvm/bin/gradle` launcher and a managed `current` symlink |
-| Smart reuse | Detects existing Gradle homes from Wrapper caches, `PATH`, SDKMAN, and common system paths |
-| Safer installs | `gvm install` shows a progress bar, keeps partial downloads, and resumes after interruption |
-
 ## Install
 
 | Method | Command |
@@ -116,4 +107,3 @@ Current release archives are published for:
 
 - `linux-x86_64`
 - `linux-aarch64`
-
