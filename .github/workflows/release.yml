@@ -14,8 +14,6 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  BUILD_TARGET: x86_64-unknown-linux-musl
-  RELEASE_ARCHIVE_TARGET: linux-x86_64
   AUR_PACKAGE_NAME: gvm-bin
 
 jobs:
@@ -35,6 +33,26 @@ jobs:
   build-release:
     needs: verify
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - archive_target: linux-x86_64
+            rust_target: x86_64-unknown-linux-musl
+            binary_path: ./target/x86_64-unknown-linux-musl/release/gvm
+            install_command: |
+              sudo apt-get update
+              sudo apt-get install -y musl-tools
+            linker: ""
+          - archive_target: linux-aarch64
+            rust_target: aarch64-unknown-linux-gnu
+            binary_path: ./target/aarch64-unknown-linux-gnu/release/gvm
+            install_command: |
+              sudo apt-get update
+              sudo apt-get install -y gcc-aarch64-linux-gnu
+            linker: aarch64-linux-gnu-gcc
+    env:
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: ${{ matrix.linker }}
 
     steps:
       - name: Check out repository
@@ -47,15 +65,13 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ env.BUILD_TARGET }}
+          targets: ${{ matrix.rust_target }}
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
+        run: ${{ matrix.install_command }}
 
       - name: Build release binary
-        run: cargo build --locked --release --target "${BUILD_TARGET}"
+        run: cargo build --locked --release --target "${{ matrix.rust_target }}"
 
       - name: Package release archive
         run: |
@@ -63,68 +79,42 @@ jobs:
           mkdir -p dist
           ./scripts/build-release-archive.sh \
             "${{ steps.release_meta.outputs.version }}" \
-            "${RELEASE_ARCHIVE_TARGET}" \
-            "./target/${BUILD_TARGET}/release/gvm" \
+            "${{ matrix.archive_target }}" \
+            "${{ matrix.binary_path }}" \
             dist
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-dist
+          name: release-dist-${{ matrix.archive_target }}
           path: dist/*
 
-      - name: Remove legacy release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.release_meta.outputs.version }}
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          import urllib.error
-          import urllib.request
+  publish-release:
+    needs: build-release
+    runs-on: ubuntu-latest
 
-          repo = os.environ["GITHUB_REPOSITORY"]
-          tag = os.environ["GITHUB_REF_NAME"]
-          token = os.environ["GH_TOKEN"]
-          version = os.environ["VERSION"]
-          wanted = {
-              f"gvm-{version}-linux-x86_64.tar.gz",
-              f"gvm-{version}-linux-x86_64.tar.gz.sha256",
-          }
-          headers = {
-              "Authorization": f"Bearer {token}",
-              "Accept": "application/vnd.github+json",
-              "X-GitHub-Api-Version": "2022-11-28",
-          }
-          release_url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
-          try:
-              request = urllib.request.Request(release_url, headers=headers)
-              with urllib.request.urlopen(request) as response:
-                  release = json.load(response)
-          except urllib.error.HTTPError as error:
-              if error.code == 404:
-                  raise SystemExit(0)
-              raise
+    steps:
+      - name: Derive release version
+        id: release_meta
+        run: echo "version=${GITHUB_REF_NAME#release-}" >> "$GITHUB_OUTPUT"
 
-          prefix = f"gvm-{version}-"
-          for asset in release.get("assets", []):
-              name = asset["name"]
-              if name.startswith(prefix) and name not in wanted:
-                  delete = urllib.request.Request(
-                      asset["url"],
-                      headers=headers,
-                      method="DELETE",
-                  )
-                  with urllib.request.urlopen(delete):
-                      pass
-                  print(f"deleted {name}")
-          PY
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-dist-*
+          merge-multiple: true
+          path: dist
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ steps.release_meta.outputs.version }}
+          body: |
+            Prebuilt archives for gvm ${{ steps.release_meta.outputs.version }}.
+
+            Available targets:
+            - linux-x86_64
+            - linux-aarch64
           files: |
             dist/*.tar.gz
             dist/*.sha256
@@ -146,6 +136,8 @@ jobs:
           wanted = {
               f"gvm-{version}-linux-x86_64.tar.gz",
               f"gvm-{version}-linux-x86_64.tar.gz.sha256",
+              f"gvm-{version}-linux-aarch64.tar.gz",
+              f"gvm-{version}-linux-aarch64.tar.gz.sha256",
           }
           headers = {
               "Authorization": f"Bearer {token}",
@@ -172,7 +164,7 @@ jobs:
           PY
 
   publish-aur:
-    needs: build-release
+    needs: publish-release
     runs-on: ubuntu-latest
 
     steps:
@@ -200,7 +192,8 @@ jobs:
         if: ${{ steps.aur.outputs.enabled == 'true' }}
         uses: actions/download-artifact@v4
         with:
-          name: release-dist
+          pattern: release-dist-*
+          merge-multiple: true
           path: dist
 
       - name: Start SSH agent
@@ -225,28 +218,54 @@ jobs:
         run: |
           chmod +x ./scripts/render-aur-package.sh
           VERSION="${{ steps.release_meta.outputs.version }}"
-          ARCHIVE="gvm-${VERSION}-${RELEASE_ARCHIVE_TARGET}.tar.gz"
-          SHA256="$(cut -d' ' -f1 "dist/${ARCHIVE}.sha256")"
+          X86_64_SHA="$(cut -d' ' -f1 "dist/gvm-${VERSION}-linux-x86_64.tar.gz.sha256")"
+          AARCH64_SHA="$(cut -d' ' -f1 "dist/gvm-${VERSION}-linux-aarch64.tar.gz.sha256")"
           WORKDIR="$(mktemp -d)"
           trap 'rm -rf "${WORKDIR}"' EXIT INT TERM
+          REPO_DIR="${WORKDIR}/${AUR_PACKAGE_NAME}"
 
-          git clone "ssh://aur@aur.archlinux.org/${AUR_PACKAGE_NAME}.git" "${WORKDIR}/${AUR_PACKAGE_NAME}"
-          ./scripts/render-aur-package.sh \
-            "${WORKDIR}/${AUR_PACKAGE_NAME}" \
-            "${AUR_PACKAGE_NAME}" \
-            "${VERSION}" \
-            "${{ github.repository }}" \
-            "${RELEASE_ARCHIVE_TARGET}" \
-            "${SHA256}"
+          git clone "ssh://aur@aur.archlinux.org/${AUR_PACKAGE_NAME}.git" "${REPO_DIR}"
 
-          cd "${WORKDIR}/${AUR_PACKAGE_NAME}"
+          CURRENT_PKGVER=
+          CURRENT_PKGREL=
+          if [ -f "${REPO_DIR}/PKGBUILD" ]; then
+            CURRENT_PKGVER="$(sed -n 's/^pkgver=//p' "${REPO_DIR}/PKGBUILD" | head -n 1)"
+            CURRENT_PKGREL="$(sed -n 's/^pkgrel=//p' "${REPO_DIR}/PKGBUILD" | head -n 1)"
+          fi
+          CANDIDATE_PKGREL=1
+          if [ "${CURRENT_PKGVER}" = "${VERSION}" ] && [ -n "${CURRENT_PKGREL}" ]; then
+            CANDIDATE_PKGREL="${CURRENT_PKGREL}"
+          fi
+
+          render_pkgbuild() {
+            ./scripts/render-aur-package.sh \
+              "${REPO_DIR}" \
+              "${AUR_PACKAGE_NAME}" \
+              "${VERSION}" \
+              "$1" \
+              "${{ github.repository }}" \
+              x86_64 "${X86_64_SHA}" \
+              aarch64 "${AARCH64_SHA}"
+          }
+
+          render_pkgbuild "${CANDIDATE_PKGREL}"
+          cd "${REPO_DIR}"
           git add PKGBUILD .SRCINFO
           if git diff --cached --quiet; then
             echo "AUR package is already up to date"
             exit 0
           fi
 
-          git commit -m "Update to ${VERSION}"
+          if [ "${CURRENT_PKGVER}" = "${VERSION}" ] && [ -n "${CURRENT_PKGREL}" ]; then
+            NEXT_PKGREL="$((CURRENT_PKGREL + 1))"
+            cd "${GITHUB_WORKSPACE}"
+            render_pkgbuild "${NEXT_PKGREL}"
+            cd "${REPO_DIR}"
+            git add PKGBUILD .SRCINFO
+          fi
+
+          PKGREL="$(sed -n 's/^pkgrel=//p' PKGBUILD | head -n 1)"
+          git commit -m "Update to ${VERSION}-${PKGREL}"
           git push origin HEAD:master
 
       - name: Skip AUR publish

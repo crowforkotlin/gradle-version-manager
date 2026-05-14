@@ -6,11 +6,11 @@ usage() {
 Render PKGBUILD and .SRCINFO for the gvm AUR package.
 
 Usage:
-  ./scripts/render-aur-package.sh <output-dir> <pkgname> <pkgver> <repo> <target> <sha256>
+  ./scripts/render-aur-package.sh <output-dir> <pkgname> <pkgver> <pkgrel> <repo> <arch> <sha256> [<arch> <sha256>...]
 EOF
 }
 
-if [ "$#" -ne 6 ]; then
+if [ "$#" -lt 7 ] || [ $((($# - 5) % 2)) -ne 0 ]; then
   usage >&2
   exit 1
 fi
@@ -18,35 +18,56 @@ fi
 output_dir=$1
 pkgname=$2
 pkgver=$3
-repo=$4
-target=$5
-sha256=$6
+pkgrel=$4
+repo=$5
+shift 5
 
-archive_name="gvm-${pkgver}-${target}.tar.gz"
-archive_dir="gvm-${pkgver}-${target}"
 package_url="https://github.com/${repo}"
-release_url="${package_url}/releases/download/release-${pkgver}/${archive_name}"
 
 mkdir -p "$output_dir"
+
+arch_values=
+pkgbuild_sources=
+srcinfo_arches=
+srcinfo_sources=
+
+while [ "$#" -gt 0 ]; do
+  arch=$1
+  sha256=$2
+  shift 2
+
+  archive_name="gvm-${pkgver}-linux-${arch}.tar.gz"
+  release_url="${package_url}/releases/download/release-${pkgver}/${archive_name}"
+
+  arch_values="${arch_values} '${arch}'"
+  pkgbuild_sources="${pkgbuild_sources}
+source_${arch}=(\"${archive_name}::${release_url}\")
+sha256sums_${arch}=('${sha256}')"
+  srcinfo_arches="${srcinfo_arches}
+	arch = ${arch}"
+  srcinfo_sources="${srcinfo_sources}
+	source_${arch} = ${archive_name}::${release_url}
+	sha256sums_${arch} = ${sha256}"
+done
 
 cat >"${output_dir}/PKGBUILD" <<EOF
 pkgname=${pkgname}
 pkgver=${pkgver}
-pkgrel=1
+pkgrel=${pkgrel}
 pkgdesc='Gradle version manager'
-arch=('x86_64')
+arch=(${arch_values# })
 url='${package_url}'
 license=('MIT')
 provides=('gvm')
 conflicts=('gvm')
-source=("${archive_name}::${release_url}")
-sha256sums=('${sha256}')
+${pkgbuild_sources#?}
 
 package() {
-  install -Dm755 "\${srcdir}/${archive_dir}/gvm" "\${pkgdir}/usr/bin/gvm"
-  install -Dm755 "\${srcdir}/${archive_dir}/install.sh" "\${pkgdir}/usr/share/doc/\${pkgname}/install.sh"
-  install -Dm644 "\${srcdir}/${archive_dir}/README.md" "\${pkgdir}/usr/share/doc/\${pkgname}/README.md"
-  install -Dm644 "\${srcdir}/${archive_dir}/README_ZH.md" "\${pkgdir}/usr/share/doc/\${pkgname}/README_ZH.md"
+  archive_dir="gvm-${pkgver}-linux-\${CARCH}"
+  install -Dm755 "\${srcdir}/\${archive_dir}/gvm" "\${pkgdir}/usr/bin/gvm"
+  install -Dm755 "\${srcdir}/\${archive_dir}/install.sh" "\${pkgdir}/usr/share/doc/\${pkgname}/install.sh"
+  install -Dm644 "\${srcdir}/\${archive_dir}/README.md" "\${pkgdir}/usr/share/doc/\${pkgname}/README.md"
+  install -Dm644 "\${srcdir}/\${archive_dir}/README_ZH.md" "\${pkgdir}/usr/share/doc/\${pkgname}/README_ZH.md"
 }
 EOF
 
@@ -54,14 +75,13 @@ cat >"${output_dir}/.SRCINFO" <<EOF
 pkgbase = ${pkgname}
 	pkgdesc = Gradle version manager
 	pkgver = ${pkgver}
-	pkgrel = 1
+	pkgrel = ${pkgrel}
 	url = ${package_url}
-	arch = x86_64
+${srcinfo_arches#?}
 	license = MIT
 	conflicts = gvm
 	provides = gvm
-	source = ${archive_name}::${release_url}
-	sha256sums = ${sha256}
+${srcinfo_sources#?}
 
 pkgname = ${pkgname}
 EOF
