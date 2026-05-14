@@ -82,34 +82,50 @@ jobs:
 
   publish-aur:
     needs: build-release
-    if: ${{ secrets.AUR_SSH_PRIVATE_KEY != '' }}
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check AUR secret
+        id: aur
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -n "${AUR_SSH_PRIVATE_KEY}" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check out repository
+        if: ${{ steps.aur.outputs.enabled == 'true' }}
         uses: actions/checkout@v4
 
       - name: Derive release version
+        if: ${{ steps.aur.outputs.enabled == 'true' }}
         id: release_meta
         run: echo "version=${GITHUB_REF_NAME#release-}" >> "$GITHUB_OUTPUT"
 
       - name: Download packaged artifacts
+        if: ${{ steps.aur.outputs.enabled == 'true' }}
         uses: actions/download-artifact@v4
         with:
           name: release-dist
           path: dist
 
       - name: Start SSH agent
+        if: ${{ steps.aur.outputs.enabled == 'true' }}
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
 
       - name: Trust AUR host key
+        if: ${{ steps.aur.outputs.enabled == 'true' }}
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
 
       - name: Publish AUR package
+        if: ${{ steps.aur.outputs.enabled == 'true' }}
         env:
           GIT_AUTHOR_NAME: github-actions[bot]
           GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
@@ -141,3 +157,7 @@ jobs:
           git add PKGBUILD .SRCINFO
           git commit -m "Update to ${VERSION}"
           git push
+
+      - name: Skip AUR publish
+        if: ${{ steps.aur.outputs.enabled != 'true' }}
+        run: echo "AUR_SSH_PRIVATE_KEY is not configured; skipping AUR publish"
