@@ -1,0 +1,143 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "release-*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RELEASE_TARGET: x86_64-unknown-linux-musl
+  AUR_PACKAGE_NAME: gvm-bin
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test --locked
+
+  build-release:
+    needs: verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Derive release version
+        id: release_meta
+        run: echo "version=${GITHUB_REF_NAME#release-}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.RELEASE_TARGET }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Build release binary
+        run: cargo build --locked --release --target "${RELEASE_TARGET}"
+
+      - name: Package release archive
+        run: |
+          chmod +x ./scripts/build-release-archive.sh
+          mkdir -p dist
+          ./scripts/build-release-archive.sh \
+            "${{ steps.release_meta.outputs.version }}" \
+            "${RELEASE_TARGET}" \
+            "./target/${RELEASE_TARGET}/release/gvm" \
+            dist
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: dist/*
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.release_meta.outputs.version }}
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+  publish-aur:
+    needs: build-release
+    if: ${{ secrets.AUR_SSH_PRIVATE_KEY != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Derive release version
+        id: release_meta
+        run: echo "version=${GITHUB_REF_NAME#release-}" >> "$GITHUB_OUTPUT"
+
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+
+      - name: Trust AUR host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+
+      - name: Publish AUR package
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          chmod +x ./scripts/render-aur-package.sh
+          VERSION="${{ steps.release_meta.outputs.version }}"
+          ARCHIVE="gvm-${VERSION}-${RELEASE_TARGET}.tar.gz"
+          SHA256="$(cut -d' ' -f1 "dist/${ARCHIVE}.sha256")"
+          WORKDIR="$(mktemp -d)"
+          trap 'rm -rf "${WORKDIR}"' EXIT INT TERM
+
+          git clone "ssh://aur@aur.archlinux.org/${AUR_PACKAGE_NAME}.git" "${WORKDIR}/${AUR_PACKAGE_NAME}"
+          ./scripts/render-aur-package.sh \
+            "${WORKDIR}/${AUR_PACKAGE_NAME}" \
+            "${AUR_PACKAGE_NAME}" \
+            "${VERSION}" \
+            "${{ github.repository }}" \
+            "${RELEASE_TARGET}" \
+            "${SHA256}"
+
+          cd "${WORKDIR}/${AUR_PACKAGE_NAME}"
+          if git diff --quiet -- PKGBUILD .SRCINFO; then
+            echo "AUR package is already up to date"
+            exit 0
+          fi
+
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to ${VERSION}"
+          git push
