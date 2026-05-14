@@ -18,6 +18,7 @@ env:
 
 jobs:
   verify:
+    name: verify
     runs-on: ubuntu-latest
 
     steps:
@@ -31,12 +32,14 @@ jobs:
         run: cargo test --locked
 
   build-release:
+    name: build ${{ matrix.job_name }}
     needs: verify
     strategy:
       fail-fast: false
       matrix:
         include:
           - archive_target: linux-x86_64
+            job_name: linux-x64
             runs_on: ubuntu-latest
             rust_target: x86_64-unknown-linux-musl
             install_command: |
@@ -44,26 +47,31 @@ jobs:
               sudo apt-get install -y musl-tools
             binary_name: gvm
           - archive_target: linux-aarch64
+            job_name: linux-arm64
             runs_on: ubuntu-24.04-arm
             rust_target: aarch64-unknown-linux-gnu
             install_command: ":"
             binary_name: gvm
           - archive_target: darwin-x86_64
+            job_name: macos-x64
             runs_on: macos-15-intel
             rust_target: x86_64-apple-darwin
             install_command: ":"
             binary_name: gvm
           - archive_target: darwin-aarch64
+            job_name: macos-arm64
             runs_on: macos-latest
             rust_target: aarch64-apple-darwin
             install_command: ":"
             binary_name: gvm
           - archive_target: windows-x86_64
+            job_name: windows-x64
             runs_on: windows-latest
             rust_target: x86_64-pc-windows-msvc
             install_command: ":"
             binary_name: gvm.exe
           - archive_target: windows-aarch64
+            job_name: windows-arm64
             runs_on: windows-11-arm
             rust_target: aarch64-pc-windows-msvc
             install_command: ":"
@@ -102,6 +110,27 @@ jobs:
             "./target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}" \
             dist
 
+      - name: Export standalone Windows exe
+        if: ${{ endsWith(matrix.binary_name, '.exe') }}
+        env:
+          VERSION: ${{ steps.release_meta.outputs.version }}
+          SOURCE_BINARY: ./target/${{ matrix.rust_target }}/release/${{ matrix.binary_name }}
+          EXE_ASSET: gvm-${{ steps.release_meta.outputs.version }}-${{ matrix.archive_target }}.exe
+        run: |
+          cp "${SOURCE_BINARY}" "dist/${EXE_ASSET}"
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          path = Path("dist") / os.environ["EXE_ASSET"]
+          digest = hashlib.sha256(path.read_bytes()).hexdigest()
+          (path.parent / f"{path.name}.sha256").write_text(
+              f"{digest}  {path.name}\n",
+              encoding="utf-8",
+          )
+          PY
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -109,6 +138,7 @@ jobs:
           path: dist/*
 
   publish-release:
+    name: publish
     needs: build-release
     runs-on: ubuntu-latest
 
@@ -198,6 +228,8 @@ jobs:
                   "- darwin-aarch64",
                   "- windows-x86_64",
                   "- windows-aarch64",
+                  "- windows-x86_64.exe",
+                  "- windows-aarch64.exe",
                   "",
                   "## Install",
                   "",
@@ -227,7 +259,7 @@ jobs:
               --notes-file dist/release-notes.md
           fi
 
-          gh release upload "${GITHUB_REF_NAME}" dist/*.tar.gz dist/*.sha256 --clobber
+          gh release upload "${GITHUB_REF_NAME}" dist/*.tar.gz dist/*.exe dist/*.sha256 --clobber
 
       - name: Remove stale release assets
         env:
@@ -254,8 +286,12 @@ jobs:
               f"gvm-{version}-darwin-aarch64.tar.gz.sha256",
               f"gvm-{version}-windows-x86_64.tar.gz",
               f"gvm-{version}-windows-x86_64.tar.gz.sha256",
+              f"gvm-{version}-windows-x86_64.exe",
+              f"gvm-{version}-windows-x86_64.exe.sha256",
               f"gvm-{version}-windows-aarch64.tar.gz",
               f"gvm-{version}-windows-aarch64.tar.gz.sha256",
+              f"gvm-{version}-windows-aarch64.exe",
+              f"gvm-{version}-windows-aarch64.exe.sha256",
           }
           headers = {
               "Authorization": f"Bearer {token}",
@@ -282,6 +318,7 @@ jobs:
           PY
 
   publish-aur:
+    name: publish aur
     needs: publish-release
     runs-on: ubuntu-latest
 

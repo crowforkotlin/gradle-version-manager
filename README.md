@@ -22,14 +22,36 @@ curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manage
 
 `install.sh` detects the latest release and selects the matching archive for the current OS and architecture automatically.
 
-### Other install paths
+### Install from a release archive
 
-| Method | Command |
-| --- | --- |
-| Download installer first | `curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh && sh install.sh --activate` |
-| Arch Linux | `paru -S gvm-bin` or `yay -S gvm-bin` |
-| From source | `cargo build --release && ./install.sh --from ./target/release/gvm --activate` |
-| Pin a specific release | `curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.0 sh -s -- --activate` |
+```bash
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
+sh install.sh --url <release-tarball-url> --activate
+```
+
+### Install on Arch Linux
+
+```bash
+paru -S gvm-bin
+```
+
+```bash
+yay -S gvm-bin
+```
+
+### Build from source
+
+```bash
+cargo build --release
+./install.sh --from ./target/release/gvm --activate
+```
+
+### Pin a specific release
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | \
+  GVM_RELEASE_TAG=release-1.0.0 sh -s -- --activate
+```
 
 `install.sh --activate` adds the required `PATH` entry to one shell startup file:
 
@@ -124,3 +146,8 @@ Current release archives are published for:
 - `darwin-aarch64`
 - `windows-x86_64`
 - `windows-aarch64`
+
+Windows releases also include standalone executables:
+
+- `gvm-<version>-windows-x86_64.exe`
+- `gvm-<version>-windows-aarch64.exe`

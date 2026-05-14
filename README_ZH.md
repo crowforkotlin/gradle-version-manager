@@ -22,14 +22,36 @@ curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manage
 
 `install.sh` 会自动检测当前系统和架构，并选择最新 release 中匹配的安装包。
 
-### 其他安装方式
+### 通过 release 安装
 
-| 方式 | 命令 |
-| --- | --- |
-| 先下载安装脚本 | `curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh && sh install.sh --activate` |
-| Arch Linux | `paru -S gvm-bin` 或 `yay -S gvm-bin` |
-| 源码构建 | `cargo build --release && ./install.sh --from ./target/release/gvm --activate` |
-| 固定某个 release | `curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.0 sh -s -- --activate` |
+```bash
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
+sh install.sh --url <release-tarball-url> --activate
+```
+
+### 在 Arch Linux 上安装
+
+```bash
+paru -S gvm-bin
+```
+
+```bash
+yay -S gvm-bin
+```
+
+### 从源码构建安装
+
+```bash
+cargo build --release
+./install.sh --from ./target/release/gvm --activate
+```
+
+### 固定某个 release
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | \
+  GVM_RELEASE_TAG=release-1.0.0 sh -s -- --activate
+```
 
 `install.sh --activate` 会把需要的 `PATH` 追加到一个 shell 启动文件中：
 
@@ -124,3 +146,8 @@ gvm add --link /opt/gradle-8.13
 - `darwin-aarch64`
 - `windows-x86_64`
 - `windows-aarch64`
+
+Windows 还会额外提供独立可执行文件：
+
+- `gvm-<version>-windows-x86_64.exe`
+- `gvm-<version>-windows-aarch64.exe`
