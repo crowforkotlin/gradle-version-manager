@@ -94,6 +94,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Derive release version
         id: release_meta
         run: echo "version=${GITHUB_REF_NAME#release-}" >> "$GITHUB_OUTPUT"
@@ -105,16 +110,41 @@ jobs:
           merge-multiple: true
           path: dist
 
+      - name: Generate release notes
+        run: |
+          previous_tag="$(git tag -l 'release-*' | grep -Fxv "${GITHUB_REF_NAME}" | sort -V | tail -n 1 || true)"
+          if [ -n "${previous_tag}" ]; then
+            range="${previous_tag}..HEAD"
+          else
+            range="HEAD"
+          fi
+
+          {
+            echo "## Highlights"
+            commits="$(git log --no-merges --format='- %s' "${range}" | head -n 8)"
+            if [ -n "${commits}" ]; then
+              printf '%s\n' "${commits}"
+            else
+              echo "- Initial public release"
+            fi
+            echo
+            echo "## Downloads"
+            echo "- linux-x86_64"
+            echo "- linux-aarch64"
+            echo
+            echo "## Install"
+            echo '```bash'
+            echo 'paru -S gvm-bin'
+            echo '# or'
+            echo 'yay -S gvm-bin'
+            echo '```'
+          } > dist/release-notes.md
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ steps.release_meta.outputs.version }}
-          body: |
-            Prebuilt archives for gvm ${{ steps.release_meta.outputs.version }}.
-
-            Available targets:
-            - linux-x86_64
-            - linux-aarch64
+          body_path: dist/release-notes.md
           files: |
             dist/*.tar.gz
             dist/*.sha256

@@ -8,12 +8,14 @@ mod version;
 use std::collections::BTreeMap;
 use std::env;
 use std::fs as stdfs;
-use std::fs::File;
-use std::io::{self, BufRead, BufReader, Write};
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use reqwest::header::RANGE;
 use reqwest::StatusCode;
 use reqwest::blocking::Client;
 use serde::Deserialize;
@@ -76,15 +78,19 @@ impl Store {
             );
         }
 
-        let staging = self.make_staging_dir(&release.version)?;
-        let archive_path = staging
-            .path()
-            .join(format!("gradle-{}-bin.zip", release.version));
+        let staging_dir = self.install_staging_dir(&release.version);
+        stdfs::create_dir_all(&staging_dir)
+            .with_context(|| format!("create install staging directory {}", staging_dir.display()))?;
 
-        self.download_to_file(&release.download_url, &archive_path)?;
-        self.verify_checksum(&release.checksum_url, &archive_path)?;
+        let archive_path = staging_dir.join(format!("gradle-{}-bin.zip", release.version));
+        let partial_archive_path = staging_dir.join(format!("gradle-{}-bin.zip.part", release.version));
+        self.prepare_archive(&release, &archive_path, &partial_archive_path)?;
 
-        let extract_dir = staging.path().join("extract");
+        let extract_dir = staging_dir.join("extract");
+        if extract_dir.exists() {
+            stdfs::remove_dir_all(&extract_dir)
+                .with_context(|| format!("remove stale extraction directory {}", extract_dir.display()))?;
+        }
         stdfs::create_dir_all(&extract_dir).context("create extraction directory")?;
         unzip_archive(&archive_path, &extract_dir)?;
 
@@ -97,6 +103,8 @@ impl Store {
         })?;
 
         self.ensure_launcher_link()?;
+        stdfs::remove_dir_all(&staging_dir)
+            .with_context(|| format!("remove install staging directory {}", staging_dir.display()))?;
         Ok(InstallStatus::Installed(release.version))
     }
 
@@ -208,7 +216,7 @@ impl Store {
 
         match mode {
             AddMode::Copy => {
-                let staging = self.make_staging_dir(&version)?;
+                let staging = self.make_temp_staging_dir(&version)?;
                 let staged_home = staging.path().join(format!("gradle-{version}"));
                 copy_tree(&source_home, &staged_home)?;
                 stdfs::rename(&staged_home, &managed_dir).with_context(|| {
@@ -402,31 +410,135 @@ impl Store {
         )
     }
 
-    fn make_staging_dir(&self, version: &str) -> Result<tempfile::TempDir> {
+    fn make_temp_staging_dir(&self, version: &str) -> Result<tempfile::TempDir> {
         tempfile::Builder::new()
             .prefix(&format!("install-{}-", sanitize_version(version)))
             .tempdir_in(self.tmp_dir())
             .context("create temporary install directory")
     }
 
-    fn download_to_file(&self, url: &str, destination: &Path) -> Result<()> {
-        let mut response = self
-            .client
-            .get(url)
-            .send()
-            .with_context(|| format!("download {url}"))?;
-
-        if response.status() != StatusCode::OK {
-            bail!("download {url}: unexpected status {}", response.status());
+    fn prepare_archive(
+        &self,
+        release: &ResolvedInstall,
+        archive_path: &Path,
+        partial_archive_path: &Path,
+    ) -> Result<()> {
+        if archive_path.is_file() {
+            match self.verify_checksum(&release.checksum_url, archive_path) {
+                Ok(()) => return Ok(()),
+                Err(_) => {
+                    stdfs::remove_file(archive_path).with_context(|| {
+                        format!("remove invalid cached archive {}", archive_path.display())
+                    })?;
+                }
+            }
         }
 
-        let mut file = File::create(destination)
-            .with_context(|| format!("create archive {}", destination.display()))?;
-        response
-            .copy_to(&mut file)
-            .with_context(|| format!("write archive {}", destination.display()))?;
+        let mut allow_clean_retry = true;
+        loop {
+            self.download_to_file(&release.download_url, partial_archive_path, &release.version)?;
+            match self.verify_checksum(&release.checksum_url, partial_archive_path) {
+                Ok(()) => break,
+                Err(_error) if allow_clean_retry => {
+                    allow_clean_retry = false;
+                    if partial_archive_path.exists() {
+                        stdfs::remove_file(partial_archive_path).with_context(|| {
+                            format!(
+                                "remove corrupt partial archive {}",
+                                partial_archive_path.display()
+                            )
+                        })?;
+                    }
+                    if io::stderr().is_terminal() {
+                        eprintln!("retrying download for Gradle {} after checksum mismatch", release.version);
+                    }
+                    continue;
+                }
+                Err(error) => {
+                    if partial_archive_path.exists() {
+                        stdfs::remove_file(partial_archive_path).with_context(|| {
+                            format!(
+                                "remove corrupt partial archive {}",
+                                partial_archive_path.display()
+                            )
+                        })?;
+                    }
+                    return Err(error);
+                }
+            }
+        }
+
+        if archive_path.exists() {
+            stdfs::remove_file(archive_path)
+                .with_context(|| format!("remove stale archive {}", archive_path.display()))?;
+        }
+        stdfs::rename(partial_archive_path, archive_path).with_context(|| {
+            format!(
+                "promote downloaded archive {} -> {}",
+                partial_archive_path.display(),
+                archive_path.display()
+            )
+        })?;
+
+        Ok(())
+    }
+
+    fn download_to_file(&self, url: &str, destination: &Path, version: &str) -> Result<()> {
+        if let Some(parent) = destination.parent() {
+            stdfs::create_dir_all(parent)
+                .with_context(|| format!("create download directory {}", parent.display()))?;
+        }
+
+        let existing_bytes = stdfs::metadata(destination).map(|metadata| metadata.len()).unwrap_or(0);
+
+        let request = if existing_bytes > 0 {
+            self.client
+                .get(url)
+                .header(RANGE, format!("bytes={existing_bytes}-"))
+        } else {
+            self.client.get(url)
+        };
+        let mut response = request.send().with_context(|| format!("download {url}"))?;
+
+        let append = match response.status() {
+            StatusCode::OK => false,
+            StatusCode::PARTIAL_CONTENT if existing_bytes > 0 => true,
+            StatusCode::RANGE_NOT_SATISFIABLE if existing_bytes > 0 => return Ok(()),
+            status => bail!("download {url}: unexpected status {status}"),
+        };
+
+        let starting_bytes = if append { existing_bytes } else { 0 };
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(!append)
+            .append(append)
+            .open(destination)
+            .with_context(|| format!("open archive {}", destination.display()))?;
+
+        let total_bytes = response
+            .content_length()
+            .map(|length| length.saturating_add(starting_bytes));
+        let progress_bar = Self::download_progress_bar(version, total_bytes, starting_bytes, append);
+
+        let mut downloaded = starting_bytes;
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let read = response
+                .read(&mut buffer)
+                .with_context(|| format!("read response body from {url}"))?;
+            if read == 0 {
+                break;
+            }
+            file.write_all(&buffer[..read])
+                .with_context(|| format!("write archive {}", destination.display()))?;
+            downloaded += read as u64;
+            progress_bar.set_position(downloaded);
+        }
+
         file.flush()
             .with_context(|| format!("flush archive {}", destination.display()))?;
+        progress_bar.finish_and_clear();
         Ok(())
     }
 
@@ -641,8 +753,65 @@ impl Store {
         self.home.join("tmp")
     }
 
+    fn install_staging_dir(&self, version: &str) -> PathBuf {
+        self.tmp_dir()
+            .join(format!("install-{}", sanitize_version(version)))
+    }
+
     fn current_link(&self) -> PathBuf {
         self.home.join("current")
+    }
+
+    fn download_progress_bar(
+        version: &str,
+        total_bytes: Option<u64>,
+        starting_bytes: u64,
+        resumed: bool,
+    ) -> ProgressBar {
+        let draw_target = if io::stderr().is_terminal() {
+            ProgressDrawTarget::stderr()
+        } else {
+            ProgressDrawTarget::hidden()
+        };
+
+        let message = if resumed {
+            format!("Gradle {version} (resuming)")
+        } else {
+            format!("Gradle {version}")
+        };
+
+        let progress_bar = match total_bytes {
+            Some(total_bytes) => {
+                let bar = ProgressBar::new(total_bytes);
+                bar.set_style(
+                    ProgressStyle::with_template(
+                        "{spinner:.green} downloading {msg} [{bar:32.cyan/blue}] {bytes}/{total_bytes} {bytes_per_sec} eta {eta}",
+                    )
+                    .expect("valid download progress template")
+                    .progress_chars("=>-"),
+                );
+                bar.set_position(starting_bytes);
+                bar
+            }
+            None => {
+                let bar = ProgressBar::new_spinner();
+                bar.set_style(
+                    ProgressStyle::with_template(
+                        "{spinner:.green} downloading {msg} {bytes} {bytes_per_sec}",
+                    )
+                    .expect("valid spinner progress template"),
+                );
+                bar.enable_steady_tick(Duration::from_millis(100));
+                if starting_bytes > 0 {
+                    bar.set_position(starting_bytes);
+                }
+                bar
+            }
+        };
+
+        progress_bar.set_draw_target(draw_target);
+        progress_bar.set_message(message);
+        progress_bar
     }
 
     fn version_dir(&self, version: &str) -> PathBuf {

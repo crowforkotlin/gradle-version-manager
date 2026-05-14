@@ -1,98 +1,49 @@
 [English](README.md) | [简体中文](README_ZH.md)
 
-# gvm
+<div align="center">
 
-Rust-based Gradle version manager with a stable managed launcher.
+# 🔨GVM🔨
 
-## Design
+**A Gradle version manager for Linux with managed installs, fast switching, and clean release binaries.**
 
-`gvm` keeps its own store under `~/.gvm` instead of treating `~/.gradle/wrapper/dists` as the source of truth.
+[![Release](https://img.shields.io/github/v/release/crowforkotlin/gradle-version-manager?label=release)](https://github.com/crowforkotlin/gradle-version-manager/releases)
+[![AUR](https://img.shields.io/aur/version/gvm-bin?label=AUR)](https://aur.archlinux.org/packages/gvm-bin)
+[![License](https://img.shields.io/github/license/crowforkotlin/gradle-version-manager)](LICENSE)
 
-- `~/.gvm/versions/<version>` stores extracted Gradle homes
-- `~/.gvm/current` is the active version symlink
-- `~/.gvm/bin/gradle` is the stable launcher you put on `PATH`
+</div>
 
-That separation is intentional: Wrapper caches can contain duplicate hashes, partial downloads, and entries the user may delete independently.
+## Why 🔨GVM🔨
 
-## Scope
+| Feature | Details |
+| --- | --- |
+| Official downloads | Installs Gradle from the official distribution service with SHA-256 verification |
+| Smooth switching | Uses a stable `~/.gvm/bin/gradle` launcher and a managed `current` symlink |
+| Smart reuse | Detects existing Gradle homes from Wrapper caches, `PATH`, SDKMAN, and common system paths |
+| Safer installs | `gvm install` shows a progress bar, keeps partial downloads, and resumes after interruption |
 
-This version implements the first complete CLI surface:
+## Install
 
-- `gvm install <version>`
-- `gvm list-remote`
-- `gvm detect`
-- `gvm add <path>`
-- `gvm list`
-- `gvm remove <version>`
-- `gvm clean`
-- `gvm use <version>`
-- `gvm current`
+| Method | Command |
+| --- | --- |
+| Release archive | `./install.sh --url <release-tarball-url> --activate` |
+| Arch Linux | `paru -S gvm-bin` or `yay -S gvm-bin` |
+| From source | `cargo build --release && ./install.sh --from ./target/release/gvm --activate` |
 
-It manages a global active version. Detection scans `GRADLE_HOME`, `PATH`, `~/.gradle/wrapper/dists`, SDKMAN, and common system prefixes. Project-local `.gradle-version` and Wrapper-aware auto-switching are still future work.
-
-## Installation
-
-### Release binary
-
-If a release binary is available for your platform, install it with `install.sh`.
-
-Install from a release tarball or raw binary URL:
-
-```bash
-./install.sh --url <release-tarball-or-binary-url> --activate
-```
-
-You can also install from a local binary file:
-
-```bash
-./install.sh --from ./target/release/gvm --activate
-```
-
-### Shell configuration
-
-To make both `gvm` and the managed Gradle launcher available in new terminal sessions, your `PATH` should include:
-
-- the directory containing the `gvm` executable
-- `~/.gvm/bin`
-
-`install.sh --activate` appends the required `PATH` line to one shell startup file, such as `~/.zshrc`, `~/.bashrc`, or `~/.profile`:
+`install.sh --activate` adds the required `PATH` entry to one shell startup file:
 
 ```bash
 export PATH="$HOME/.local/bin:$HOME/.gvm/bin:$PATH"
 ```
 
-If you prefer to edit the shell startup file manually, add the same line yourself.
+## Quick start
 
-### Build from source
-
-Build from source if you are developing locally or if no release binary is available for your platform.
-
-```bash
-cargo build --release
-./install.sh --from ./target/release/gvm --activate
-```
-
-You can override the managed home for testing with `GVM_HOME=/some/path`.
-
-### Arch Linux
-
-If an AUR package is available, install it with:
-
-```bash
-paru -S gvm-bin
-# or
-yay -S gvm-bin
-```
-
-## Usage
-
-Install a managed version from the official Gradle distribution service:
+Install a Gradle version:
 
 ```bash
 gvm install 8.13
 ```
 
-Install the latest stable release without looking it up manually:
+Install the latest stable release:
 
 ```bash
 gvm install current
@@ -100,74 +51,44 @@ gvm install latest
 gvm install latest-8
 ```
 
-List downloadable versions:
-
-```bash
-gvm list-remote
-gvm list-remote --major 8
-gvm list-remote --all
-```
-
-`gvm install lts` is intentionally unsupported because Gradle does not publish an official LTS line.
-
-Detect existing Gradle homes:
-
-```bash
-gvm detect
-```
-
-Add an existing Gradle home by copying it into `~/.gvm/versions`:
-
-```bash
-gvm add ~/.gradle/wrapper/dists/gradle-8.13-all/<hash>/gradle-8.13
-```
-
-Add by symlinking instead of copying:
-
-```bash
-gvm add --link /opt/gradle-8.13
-```
-
-Switch the global active version:
+Switch and inspect:
 
 ```bash
 gvm use 8.13
-```
-
-Show the active version:
-
-```bash
 gvm current
-```
-
-List managed versions:
-
-```bash
 gvm list
 ```
 
-Remove a managed version:
+Add an existing Gradle home:
 
 ```bash
-gvm remove 8.13
-gvm remove 8.13 --force
+gvm add ~/.gradle/wrapper/dists/gradle-8.13-all/<hash>/gradle-8.13
+gvm add --link /opt/gradle-8.13
 ```
 
-Clean temporary files and optionally Wrapper cache remnants:
+## Command reference
 
-```bash
-gvm clean
-gvm clean --wrapper-cache
-gvm clean --all
-```
+| Command | Purpose |
+| --- | --- |
+| `gvm install <version>` | Download and install a managed Gradle version |
+| `gvm list-remote [--major N] [--all]` | List downloadable versions from Gradle's version service |
+| `gvm detect` | Find existing Gradle homes on the machine |
+| `gvm add <path> [--link]` | Add an existing Gradle home by copying or symlinking it |
+| `gvm list` | Show managed versions |
+| `gvm use <version>` | Switch the active global version |
+| `gvm current` | Print the selected version |
+| `gvm remove <version> [--force]` | Remove a managed version |
+| `gvm clean [--wrapper-cache\|--all]` | Clean `~/.gvm/tmp`, broken links, and optional Wrapper remnants |
 
-Example output:
+## Remote version aliases
 
-```text
-  8.9
-* 8.13
-  9.5.0
-```
+| Alias | Meaning |
+| --- | --- |
+| `current` | The current stable Gradle release |
+| `latest` | Same as `current` |
+| `latest-8` | The latest stable release in the `8.x` line |
+
+`gvm install lts` is intentionally unsupported because Gradle does not publish an official LTS line.
 
 ## Managed layout
 
@@ -181,15 +102,18 @@ Example output:
   tmp/
 ```
 
-## Notes
+## How it works
 
-- `install` downloads `gradle-<version>-bin.zip` and verifies the official `.sha256` checksum before extracting.
-- `install` understands exact versions plus `current`, `latest`, and `latest-<major>`.
-- `list-remote` reads the official Gradle version metadata service instead of making you search manually.
-- `detect` treats `~/.gradle/wrapper/dists` as a discovery source only, not as the managed store.
-- `add` defaults to copying so clearing Wrapper caches or SDKMAN installs does not break managed versions; use `--link` only when you want to keep the external installation as the source of truth.
-- `remove` deletes managed directories for installed or copied versions, and only removes the managed symlink for `gvm add --link`.
-- `tmp` is only a staging area for downloads, extraction, and copy-based adds. It is normally empty after successful commands because temporary directories are cleaned automatically.
-- `clean` removes `~/.gvm/tmp` contents and broken managed symlinks; `--wrapper-cache` and `--all` also remove partial Wrapper cache files such as `.part` and `.lck`.
-- The launcher path remains stable, so your shell only needs one `PATH` entry.
-- `~/.gradle/wrapper/dists` should be treated as a future detection/add source, not as the managed store itself.
+- `gvm` keeps its own store under `~/.gvm`.
+- `~/.gradle/wrapper/dists` is treated as a detection and add source, not as the managed source of truth.
+- `gvm add` copies by default so cleaning Wrapper caches or SDKMAN does not break managed versions.
+- `gvm remove` deletes copied installs and removes only the gvm-side symlink for `gvm add --link`.
+- `gvm clean` removes transient files from `~/.gvm/tmp` and can also remove partial Wrapper cache files such as `.part` and `.lck`.
+
+## Release assets
+
+Current release archives are published for:
+
+- `linux-x86_64`
+- `linux-aarch64`
+
