@@ -4,7 +4,7 @@
 
 # 🔨GVM🔨
 
-**A Gradle version manager for Linux with managed installs, fast switching, and clean release binaries.**
+**A Gradle version manager with managed installs, fast switching, and clean cross-platform release binaries.**
 
 [![Release](https://img.shields.io/github/v/release/crowforkotlin/gradle-version-manager?label=release)](https://github.com/crowforkotlin/gradle-version-manager/releases)
 [![AUR](https://img.shields.io/aur/version/gvm-bin?label=AUR)](https://aur.archlinux.org/packages/gvm-bin)
@@ -14,17 +14,30 @@
 
 ## Install
 
+### Quick install with curl
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- --activate
+```
+
+`install.sh` detects the latest release and selects the matching archive for the current OS and architecture automatically.
+
+### Other install paths
+
 | Method | Command |
 | --- | --- |
-| Release archive | `./install.sh --url <release-tarball-url> --activate` |
+| Download installer first | `curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh && sh install.sh --activate` |
 | Arch Linux | `paru -S gvm-bin` or `yay -S gvm-bin` |
 | From source | `cargo build --release && ./install.sh --from ./target/release/gvm --activate` |
+| Pin a specific release | `curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.0 sh -s -- --activate` |
 
 `install.sh --activate` adds the required `PATH` entry to one shell startup file:
 
 ```bash
 export PATH="$HOME/.local/bin:$HOME/.gvm/bin:$PATH"
 ```
+
+`install.sh` is a POSIX `sh` script and can run on Linux, macOS, and Git Bash.
 
 ## Quick start
 
@@ -107,3 +120,7 @@ Current release archives are published for:
 
 - `linux-x86_64`
 - `linux-aarch64`
+- `darwin-x86_64`
+- `darwin-aarch64`
+- `windows-x86_64`
+- `windows-aarch64`

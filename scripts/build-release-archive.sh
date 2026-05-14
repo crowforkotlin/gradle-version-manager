@@ -26,6 +26,7 @@ if [ ! -f "$binary" ]; then
 fi
 
 package_root="gvm-${version}-${target}"
+binary_name=$(basename "$binary")
 staging_dir=$(mktemp -d)
 cleanup() {
   rm -rf "$staging_dir"
@@ -33,11 +34,15 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 mkdir -p "$staging_dir/$package_root" "$output_dir"
-install -m 755 "$binary" "$staging_dir/$package_root/gvm"
+install -m 755 "$binary" "$staging_dir/$package_root/$binary_name"
 install -m 755 ./install.sh "$staging_dir/$package_root/install.sh"
 install -m 644 ./README.md "$staging_dir/$package_root/README.md"
 install -m 644 ./README_ZH.md "$staging_dir/$package_root/README_ZH.md"
 
 archive_path="$output_dir/${package_root}.tar.gz"
 tar -C "$staging_dir" -czf "$archive_path" "$package_root"
-sha256sum "$archive_path" > "${archive_path}.sha256"
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "$archive_path" > "${archive_path}.sha256"
+else
+  shasum -a 256 "$archive_path" > "${archive_path}.sha256"
+fi

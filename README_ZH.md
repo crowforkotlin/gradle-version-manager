@@ -4,7 +4,7 @@
 
 # 🔨GVM🔨
 
-**面向 Linux 的 Gradle 版本管理器，提供受管安装、快速切换和干净的发布二进制。**
+**面向多平台的 Gradle 版本管理器，提供受管安装、快速切换和干净的发布二进制。**
 
 [![Release](https://img.shields.io/github/v/release/crowforkotlin/gradle-version-manager?label=release)](https://github.com/crowforkotlin/gradle-version-manager/releases)
 [![AUR](https://img.shields.io/aur/version/gvm-bin?label=AUR)](https://aur.archlinux.org/packages/gvm-bin)
@@ -14,17 +14,30 @@
 
 ## 安装
 
+### 通过 curl 直接安装
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- --activate
+```
+
+`install.sh` 会自动检测当前系统和架构，并选择最新 release 中匹配的安装包。
+
+### 其他安装方式
+
 | 方式 | 命令 |
 | --- | --- |
-| Release 压缩包 | `./install.sh --url <release-tarball-url> --activate` |
+| 先下载安装脚本 | `curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh && sh install.sh --activate` |
 | Arch Linux | `paru -S gvm-bin` 或 `yay -S gvm-bin` |
 | 源码构建 | `cargo build --release && ./install.sh --from ./target/release/gvm --activate` |
+| 固定某个 release | `curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.0 sh -s -- --activate` |
 
 `install.sh --activate` 会把需要的 `PATH` 追加到一个 shell 启动文件中：
 
 ```bash
 export PATH="$HOME/.local/bin:$HOME/.gvm/bin:$PATH"
 ```
+
+`install.sh` 本身是 POSIX `sh` 脚本，可以在 Linux、macOS 和 Git Bash 中运行。
 
 ## 快速开始
 
@@ -107,3 +120,7 @@ gvm add --link /opt/gradle-8.13
 
 - `linux-x86_64`
 - `linux-aarch64`
+- `darwin-x86_64`
+- `darwin-aarch64`
+- `windows-x86_64`
+- `windows-aarch64`
