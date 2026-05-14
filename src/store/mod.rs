@@ -15,9 +15,9 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
-use reqwest::header::RANGE;
 use reqwest::StatusCode;
 use reqwest::blocking::Client;
+use reqwest::header::RANGE;
 use serde::Deserialize;
 
 use self::fs::{
@@ -79,17 +79,23 @@ impl Store {
         }
 
         let staging_dir = self.install_staging_dir(&release.version);
-        stdfs::create_dir_all(&staging_dir)
-            .with_context(|| format!("create install staging directory {}", staging_dir.display()))?;
+        stdfs::create_dir_all(&staging_dir).with_context(|| {
+            format!("create install staging directory {}", staging_dir.display())
+        })?;
 
         let archive_path = staging_dir.join(format!("gradle-{}-bin.zip", release.version));
-        let partial_archive_path = staging_dir.join(format!("gradle-{}-bin.zip.part", release.version));
+        let partial_archive_path =
+            staging_dir.join(format!("gradle-{}-bin.zip.part", release.version));
         self.prepare_archive(&release, &archive_path, &partial_archive_path)?;
 
         let extract_dir = staging_dir.join("extract");
         if extract_dir.exists() {
-            stdfs::remove_dir_all(&extract_dir)
-                .with_context(|| format!("remove stale extraction directory {}", extract_dir.display()))?;
+            stdfs::remove_dir_all(&extract_dir).with_context(|| {
+                format!(
+                    "remove stale extraction directory {}",
+                    extract_dir.display()
+                )
+            })?;
         }
         stdfs::create_dir_all(&extract_dir).context("create extraction directory")?;
         unzip_archive(&archive_path, &extract_dir)?;
@@ -103,8 +109,9 @@ impl Store {
         })?;
 
         self.ensure_launcher_link()?;
-        stdfs::remove_dir_all(&staging_dir)
-            .with_context(|| format!("remove install staging directory {}", staging_dir.display()))?;
+        stdfs::remove_dir_all(&staging_dir).with_context(|| {
+            format!("remove install staging directory {}", staging_dir.display())
+        })?;
         Ok(InstallStatus::Installed(release.version))
     }
 
@@ -436,7 +443,11 @@ impl Store {
 
         let mut allow_clean_retry = true;
         loop {
-            self.download_to_file(&release.download_url, partial_archive_path, &release.version)?;
+            self.download_to_file(
+                &release.download_url,
+                partial_archive_path,
+                &release.version,
+            )?;
             match self.verify_checksum(&release.checksum_url, partial_archive_path) {
                 Ok(()) => break,
                 Err(_error) if allow_clean_retry => {
@@ -450,7 +461,10 @@ impl Store {
                         })?;
                     }
                     if io::stderr().is_terminal() {
-                        eprintln!("retrying download for Gradle {} after checksum mismatch", release.version);
+                        eprintln!(
+                            "retrying download for Gradle {} after checksum mismatch",
+                            release.version
+                        );
                     }
                     continue;
                 }
@@ -489,7 +503,9 @@ impl Store {
                 .with_context(|| format!("create download directory {}", parent.display()))?;
         }
 
-        let existing_bytes = stdfs::metadata(destination).map(|metadata| metadata.len()).unwrap_or(0);
+        let existing_bytes = stdfs::metadata(destination)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0);
 
         let request = if existing_bytes > 0 {
             self.client
@@ -519,7 +535,8 @@ impl Store {
         let total_bytes = response
             .content_length()
             .map(|length| length.saturating_add(starting_bytes));
-        let progress_bar = Self::download_progress_bar(version, total_bytes, starting_bytes, append);
+        let progress_bar =
+            Self::download_progress_bar(version, total_bytes, starting_bytes, append);
 
         let mut downloaded = starting_bytes;
         let mut buffer = [0_u8; 64 * 1024];
@@ -782,7 +799,8 @@ impl Store {
 
         let progress_bar = match total_bytes {
             Some(total_bytes) => {
-                let bar = ProgressBar::with_draw_target(Some(total_bytes), ProgressDrawTarget::hidden());
+                let bar =
+                    ProgressBar::with_draw_target(Some(total_bytes), ProgressDrawTarget::hidden());
                 bar.set_style(
                     ProgressStyle::with_template(
                         "{spinner:.green} downloading {msg} [{bar:32.cyan/blue}] {bytes}/{total_bytes} {bytes_per_sec} eta {eta}",
