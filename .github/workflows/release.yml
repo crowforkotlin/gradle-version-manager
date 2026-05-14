@@ -129,6 +129,48 @@ jobs:
             dist/*.tar.gz
             dist/*.sha256
 
+      - name: Remove stale release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release_meta.outputs.version }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          token = os.environ["GH_TOKEN"]
+          version = os.environ["VERSION"]
+          wanted = {
+              f"gvm-{version}-linux-x86_64.tar.gz",
+              f"gvm-{version}-linux-x86_64.tar.gz.sha256",
+          }
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          release_url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+          request = urllib.request.Request(release_url, headers=headers)
+          with urllib.request.urlopen(request) as response:
+              release = json.load(response)
+
+          prefix = f"gvm-{version}-"
+          for asset in release.get("assets", []):
+              name = asset["name"]
+              if name.startswith(prefix) and name not in wanted:
+                  delete = urllib.request.Request(
+                      asset["url"],
+                      headers=headers,
+                      method="DELETE",
+                  )
+                  with urllib.request.urlopen(delete):
+                      pass
+                  print(f"deleted {name}")
+          PY
+
   publish-aur:
     needs: build-release
     runs-on: ubuntu-latest
