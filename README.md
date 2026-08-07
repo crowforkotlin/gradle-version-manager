@@ -20,7 +20,7 @@
 curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | bash
 ```
 
-This runs directly from the pipe, does not save `install.sh` locally, and enables shell activation automatically.
+This runs directly from the pipe, does not save `install.sh` locally, and asks where to add the gvm `PATH`. The default follows the current shell: bash uses `~/.bashrc`, zsh uses `~/.zshrc`, and other shells default to no changes.
 
 ### Install from a release archive
 
@@ -51,7 +51,7 @@ cargo build --release
 curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.2 bash
 ```
 
-`install.sh --activate` adds the required `PATH` entry to one shell startup file:
+Activation asks whether to update `~/.bashrc`, `~/.zshrc`, or no file. `install.sh --rc-file <path>` can select a file directly. The required `PATH` entry is:
 
 ```bash
 export PATH="$HOME/.local/bin:$HOME/.gvm/bin:$PATH"

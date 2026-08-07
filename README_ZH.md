@@ -20,7 +20,7 @@
 curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | bash
 ```
 
-该命令直接从管道执行，不会在本地保存 `install.sh`，并会自动启用 shell 激活。
+该命令直接从管道执行，不会在本地保存 `install.sh`，并会询问把 gvm 的 `PATH` 追加到哪里。默认选项会根据当前 shell 判断：bash 使用 `~/.bashrc`，zsh 使用 `~/.zshrc`，其他 shell 默认不修改文件。
 
 ### 通过 release 安装
 
@@ -51,7 +51,7 @@ cargo build --release
 curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.2 bash
 ```
 
-`install.sh --activate` 会把需要的 `PATH` 追加到一个 shell 启动文件中：
+激活时会询问修改 `~/.bashrc`、`~/.zshrc`，还是不修改文件。也可以通过 `install.sh --rc-file <path>` 直接指定文件。需要追加的 `PATH` 内容是：
 
 ```bash
 export PATH="$HOME/.local/bin:$HOME/.gvm/bin:$PATH"

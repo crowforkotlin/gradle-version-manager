@@ -317,6 +317,8 @@ jobs:
                   "curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | bash",
                   "```",
                   "",
+                  "The installer asks whether to update `~/.bashrc`, `~/.zshrc`, or no shell startup file.",
+                  "",
               ]
           )
 

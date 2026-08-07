@@ -18,8 +18,8 @@ Options:
   --repo <owner/repo>   GitHub repository used for automatic release lookup.
   --tag <tag>           Release tag to install. Default: latest
   --install-dir <dir>   Directory for the gvm executable. Default: $HOME/.local/bin
-  --activate            Append PATH setup to a shell startup file.
-  --rc-file <path>      Override which shell startup file is modified by --activate.
+  --activate            Ask where to append PATH setup and update a shell startup file.
+  --rc-file <path>      Select the startup file directly and skip the activation prompt.
   --help                Show this help.
 
 Environment:
@@ -28,6 +28,7 @@ Environment:
   GVM_RELEASE_REPO      Same as --repo. Default: crowforkotlin/gradle-version-manager
   GVM_RELEASE_TAG       Same as --tag. Default: latest
   GVM_RELEASE_URL       Same as --url.
+  GVM_RC_FILE            Same as --rc-file.
 EOF
 }
 
@@ -48,8 +49,78 @@ detect_rc_file() {
   case "$shell_name" in
     zsh) printf '%s\n' "$HOME/.zshrc" ;;
     bash) printf '%s\n' "$HOME/.bashrc" ;;
-    *) printf '%s\n' "$HOME/.profile" ;;
+    *) printf '%s\n' "" ;;
   esac
+}
+
+default_rc_choice() {
+  shell_name=$(basename "${SHELL:-sh}")
+  case "$shell_name" in
+    bash) printf '%s\n' "1" ;;
+    zsh) printf '%s\n' "2" ;;
+    *) printf '%s\n' "3" ;;
+  esac
+}
+
+choose_rc_file() {
+  if [ -n "$RC_FILE" ]; then
+    return 0
+  fi
+
+  if [ -n "${GVM_RC_FILE:-}" ]; then
+    RC_FILE=$GVM_RC_FILE
+    return 0
+  fi
+
+  RC_FILE=$(detect_rc_file)
+  if [ -n "$RC_FILE" ]; then
+    default_choice=$(default_rc_choice)
+  else
+    default_choice=3
+  fi
+
+  if [ ! -t 1 ] || [ ! -e /dev/tty ] || ! tty -s </dev/tty 2>/dev/null; then
+    if [ "$default_choice" = "3" ]; then
+      ACTIVATE=0
+    fi
+    return 0
+  fi
+
+  {
+    printf '\nWhere should gvm add its PATH?\n'
+    printf '  1) %s\n' "$HOME/.bashrc"
+    printf '  2) %s\n' "$HOME/.zshrc"
+    printf '  3) Do not modify a shell startup file\n'
+    printf 'Select [1-3] (default %s): ' "$default_choice"
+  } >/dev/tty
+
+  while :; do
+    if IFS= read -r choice </dev/tty; then
+      :
+    else
+      choice=3
+    fi
+
+    [ -n "$choice" ] || choice=$default_choice
+    case "$choice" in
+      1)
+        RC_FILE=$HOME/.bashrc
+        return 0
+        ;;
+      2)
+        RC_FILE=$HOME/.zshrc
+        return 0
+        ;;
+      3)
+        ACTIVATE=0
+        RC_FILE=
+        return 0
+        ;;
+      *)
+        printf 'Please choose 1, 2, or 3: ' >/dev/tty
+        ;;
+    esac
+  done
 }
 
 download_to() {
@@ -270,12 +341,17 @@ install_binary "$SOURCE_PATH" "$INSTALL_DIR"
 echo "installed gvm to $INSTALL_DIR/gvm"
 
 if [ "$ACTIVATE" -eq 1 ]; then
-  if [ -z "$RC_FILE" ]; then
-    RC_FILE=$(detect_rc_file)
+  choose_rc_file
+  if [ "$ACTIVATE" -eq 1 ]; then
+    activate_shell "$INSTALL_DIR" "$MANAGED_BIN_DIR" "$RC_FILE"
+    echo "restart the shell or run: source $RC_FILE"
+  else
+    echo "shell startup files were not modified."
+    echo "To enable gvm manually, add this line to a shell startup file:"
+    echo "  export PATH=\"$INSTALL_DIR:$MANAGED_BIN_DIR:\$PATH\""
   fi
-  activate_shell "$INSTALL_DIR" "$MANAGED_BIN_DIR" "$RC_FILE"
-  echo "restart the shell or run: source $RC_FILE"
 else
-  echo "add this line to a shell startup file such as ~/.zshrc, ~/.bashrc, or ~/.profile:"
+  echo "shell startup files were not modified."
+  echo "To enable gvm manually, add this line to a shell startup file:"
   echo "  export PATH=\"$INSTALL_DIR:$MANAGED_BIN_DIR:\$PATH\""
 fi
