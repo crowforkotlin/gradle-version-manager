@@ -17,16 +17,15 @@
 ### 通过 curl 直接安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | bash
 ```
 
-该命令直接从管道执行，不会在本地保存 `install.sh`；其中 `-s` 表示从标准输入读取脚本，`--` 表示把 `--activate` 传给 `install.sh`。
+该命令直接从管道执行，不会在本地保存 `install.sh`，并会自动启用 shell 激活。
 
 ### 通过 release 安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
-sh install.sh --url <release-tarball-url> --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_URL="<release-tarball-url>" bash
 ```
 
 ### 在 Arch Linux 上安装
@@ -49,7 +48,7 @@ cargo build --release
 ### 固定某个 release
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.2 sh -s -- --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.2 bash
 ```
 
 `install.sh --activate` 会把需要的 `PATH` 追加到一个 shell 启动文件中：

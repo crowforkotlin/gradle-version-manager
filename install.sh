@@ -6,12 +6,11 @@ usage() {
 Install gvm from a local binary or a release asset.
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- [--activate]
+  curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_URL=<release-tarball-url> bash
   ./install.sh [--activate]
   ./install.sh --from ./target/release/gvm [--activate]
   ./install.sh --url <release-tarball-or-binary-url> [--activate]
-  curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
-  sh install.sh --activate
 
 Options:
   --from <path>         Install from an existing local gvm binary.
@@ -28,6 +27,7 @@ Environment:
   GVM_MANAGED_BIN_DIR   Managed Gradle launcher directory. Default: $HOME/.gvm/bin
   GVM_RELEASE_REPO      Same as --repo. Default: crowforkotlin/gradle-version-manager
   GVM_RELEASE_TAG       Same as --tag. Default: latest
+  GVM_RELEASE_URL       Same as --url.
 EOF
 }
 
@@ -172,13 +172,18 @@ activate_shell() {
 }
 
 SOURCE_PATH=
-SOURCE_URL=
+SOURCE_URL=${GVM_RELEASE_URL:-}
 INSTALL_DIR=${GVM_INSTALL_DIR:-"$HOME/.local/bin"}
 MANAGED_BIN_DIR=${GVM_MANAGED_BIN_DIR:-"$HOME/.gvm/bin"}
 RELEASE_REPO=${GVM_RELEASE_REPO:-"crowforkotlin/gradle-version-manager"}
 RELEASE_TAG=${GVM_RELEASE_TAG:-"latest"}
 ACTIVATE=0
 RC_FILE=
+
+# A piped install is the one-line install form, so activate it automatically.
+if [ ! -t 0 ]; then
+  ACTIVATE=1
+fi
 
 while [ $# -gt 0 ]; do
   case "$1" in

@@ -314,8 +314,7 @@ jobs:
                   "## Installation",
                   "",
                   "```bash",
-                  "curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh",
-                  "sh install.sh --activate",
+                  "curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | bash",
                   "```",
                   "",
               ]

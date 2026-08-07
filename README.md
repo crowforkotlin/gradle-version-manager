@@ -17,16 +17,15 @@
 ### Quick install with curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | bash
 ```
 
-This runs directly from the pipe and does not save `install.sh` locally. `-s` reads the script from stdin and `--` passes `--activate` to `install.sh`.
+This runs directly from the pipe, does not save `install.sh` locally, and enables shell activation automatically.
 
 ### Install from a release archive
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
-sh install.sh --url <release-tarball-url> --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_URL="<release-tarball-url>" bash
 ```
 
 ### Install on Arch Linux
@@ -49,7 +48,7 @@ cargo build --release
 ### Pin a specific release
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.2 sh -s -- --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.2 bash
 ```
 
 `install.sh --activate` adds the required `PATH` entry to one shell startup file:
