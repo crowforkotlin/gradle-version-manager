@@ -214,38 +214,65 @@ jobs:
           else
             range="HEAD"
           fi
-          RANGE="${range}" python - <<'PY'
+          RANGE="${range}" VERSION="${{ steps.release_meta.outputs.version }}" python - <<'PY'
           import os
+          import re
           import subprocess
 
           range_spec = os.environ["RANGE"]
+          version = os.environ["VERSION"]
           output = subprocess.check_output(
-              ["git", "log", "--no-merges", "--format=%s", range_spec],
+              ["git", "log", "--no-merges", "--format=%h%x00%s%x00%b%x00%x1e", range_spec],
               text=True,
           )
-          titles = [line.strip() for line in output.splitlines() if line.strip()]
+          commits = []
+          for record in output.split("\x1e"):
+              fields = record.strip("\n").split("\x00")
+              if len(fields) < 3 or not fields[1].strip():
+                  continue
+              commits.append(
+                  {
+                      "hash": fields[0].strip(),
+                      "subject": fields[1].strip(),
+                      "body": [
+                          line.strip()
+                          for line in fields[2].splitlines()
+                          if line.strip() and not line.strip().startswith("Co-authored-by:")
+                      ],
+                  }
+              )
 
           groups = [
-              ("Features", ("feat:",)),
-              ("Fixes", ("fix:",)),
-              ("Docs", ("docs:",)),
-              ("Build", ("build:", "config:", "chore:", "ci:")),
+              ("Features", re.compile(r"^feat(?:\([^)]*\))?:")),
+              ("Fixes", re.compile(r"^fix(?:\([^)]*\))?:")),
+              ("Docs", re.compile(r"^docs(?:\([^)]*\))?:")),
+              (
+                  "Build",
+                  re.compile(r"^(?:build|config|chore|ci)(?:\([^)]*\))?:"),
+              ),
           ]
           grouped = {name: [] for name, _ in groups}
           other = []
 
-          for title in titles:
-              lowered = title.lower()
+          for commit in commits:
+              lowered = commit["subject"].lower()
               matched = False
-              for name, prefixes in groups:
-                  if lowered.startswith(prefixes):
-                      grouped[name].append(title)
+              for name, pattern in groups:
+                  if pattern.match(lowered):
+                      grouped[name].append(commit)
                       matched = True
                       break
               if not matched:
-                  other.append(title)
+                  other.append(commit)
 
-          lines = ["## What's Changed", ""]
+          lines = [
+              f"# gvm {version}",
+              "",
+              f"This release contains {len(commits)} change(s) since the previous release.",
+              "",
+              "## What's Changed",
+              "",
+          ]
           emitted = False
           for name, _ in groups:
               entries = grouped[name]
@@ -253,17 +280,21 @@ jobs:
                   continue
               emitted = True
               lines.append(f"### {name}")
-              lines.extend(f"- {entry}" for entry in entries[:8])
+              for entry in entries:
+                  lines.append(f"- `{entry['hash']}` {entry['subject']}")
+                  lines.extend(f"  {line}" for line in entry["body"])
               lines.append("")
 
           if other:
               emitted = True
               lines.append("### Other")
-              lines.extend(f"- {entry}" for entry in other[:8])
+              for entry in other:
+                  lines.append(f"- `{entry['hash']}` {entry['subject']}")
+                  lines.extend(f"  {line}" for line in entry["body"])
               lines.append("")
 
           if not emitted:
-              lines.extend(["- Initial public release", ""])
+              lines.extend(["- No user-facing changes recorded", ""])
 
           lines.extend(
               [
@@ -280,10 +311,11 @@ jobs:
                   "- windows-x86_64.exe",
                   "- windows-aarch64.exe",
                   "",
-                  "## Install",
+                  "## Installation",
                   "",
                   "```bash",
-                  "curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- --activate",
+                  "curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh",
+                  "sh install.sh --activate",
                   "```",
                   "",
               ]
@@ -451,7 +483,21 @@ jobs:
           trap 'rm -rf "${WORKDIR}"' EXIT INT TERM
           REPO_DIR="${WORKDIR}/${AUR_PACKAGE_NAME}"
 
-          git clone "ssh://aur@aur.archlinux.org/${AUR_PACKAGE_NAME}.git" "${REPO_DIR}"
+          cloned=0
+          for attempt in 1 2 3 4 5; do
+            if git clone "ssh://aur@aur.archlinux.org/${AUR_PACKAGE_NAME}.git" "${REPO_DIR}"; then
+              cloned=1
+              break
+            fi
+            rm -rf "${REPO_DIR}"
+            if [ "${attempt}" -lt 5 ]; then
+              sleep $((attempt * 15))
+            fi
+          done
+          if [ "${cloned}" -ne 1 ]; then
+            echo "failed to clone AUR package after 5 attempts" >&2
+            exit 1
+          fi
 
           CURRENT_PKGVER=
           CURRENT_PKGREL=

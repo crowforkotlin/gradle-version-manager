@@ -17,10 +17,12 @@
 ### 通过 curl 直接安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
+sh install.sh --activate
 ```
 
 `install.sh` 会自动检测当前系统和架构，并选择最新 release 中匹配的安装包。
+也支持管道写法 `curl ... | sh -s -- --activate`；其中 `-s` 表示从标准输入读取脚本，`--` 表示后续参数传给 `install.sh`。
 
 ### 通过 release 安装
 
@@ -49,8 +51,8 @@ cargo build --release
 ### 固定某个 release
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | \
-  GVM_RELEASE_TAG=release-1.0.0 sh -s -- --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
+GVM_RELEASE_TAG=release-1.0.2 sh install.sh --activate
 ```
 
 `install.sh --activate` 会把需要的 `PATH` 追加到一个 shell 启动文件中：
