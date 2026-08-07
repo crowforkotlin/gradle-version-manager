@@ -150,7 +150,7 @@ impl Store {
                 DetectionSource::Environment,
                 &managed_homes,
                 &mut detected,
-            )?;
+            );
         }
 
         if let Some(path) = env::var_os("PATH") {
@@ -163,7 +163,7 @@ impl Store {
                             DetectionSource::Path,
                             &managed_homes,
                             &mut detected,
-                        )?;
+                        );
                     }
                 }
             }
@@ -711,12 +711,7 @@ impl Store {
             let entry = entry.context("read SDKMAN Gradle entry")?;
             let candidate = entry.path();
             if candidate.join("bin").join(launcher_name()).is_file() {
-                register_detected_home(
-                    candidate,
-                    DetectionSource::Sdkman,
-                    managed_homes,
-                    detected,
-                )?;
+                register_detected_home(candidate, DetectionSource::Sdkman, managed_homes, detected);
             }
         }
 
@@ -750,7 +745,7 @@ impl Store {
                         DetectionSource::CommonPrefix,
                         managed_homes,
                         detected,
-                    )?;
+                    );
                 }
             }
         }
@@ -885,7 +880,7 @@ fn scan_wrapper_dists(
                         DetectionSource::WrapperDists,
                         managed_homes,
                         detected,
-                    )?;
+                    );
                 }
             }
         }
@@ -899,11 +894,18 @@ fn register_detected_home(
     source: DetectionSource,
     managed_homes: &BTreeMap<PathBuf, String>,
     detected: &mut BTreeMap<PathBuf, DetectedVersion>,
-) -> Result<()> {
-    let home = resolve_gradle_home(&home)?;
-    ensure_gradle_home(&home)?;
-
-    let version = infer_version_from_home(&home)?;
+) {
+    // Detection is best effort: stale environment variables and removed SDKMAN
+    // or Wrapper entries must not prevent other installations from being found.
+    let Ok(home) = resolve_gradle_home(&home) else {
+        return;
+    };
+    if ensure_gradle_home(&home).is_err() {
+        return;
+    }
+    let Ok(version) = infer_version_from_home(&home) else {
+        return;
+    };
     let managed_as = managed_homes.get(&home).cloned();
     detected.entry(home.clone()).or_insert(DetectedVersion {
         version,
@@ -911,5 +913,4 @@ fn register_detected_home(
         source,
         managed_as,
     });
-    Ok(())
 }

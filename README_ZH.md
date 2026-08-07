@@ -60,6 +60,7 @@ export PATH="$HOME/.local/bin:$HOME/.gvm/bin:$PATH"
 ```
 
 `install.sh` 本身是 POSIX `sh` 脚本，可以在 Linux、macOS 和 Git Bash 中运行。
+Android 版本会作为独立的 release 产物发布，可用于 Termux 或其他 Android shell 环境。
 
 ## 快速开始
 
@@ -142,10 +143,14 @@ gvm add --link /opt/gradle-8.13
 
 - `linux-x86_64`
 - `linux-aarch64`
+- `android-x86_64`
+- `android-aarch64`
 - `darwin-x86_64`
 - `darwin-aarch64`
 - `windows-x86_64`
 - `windows-aarch64`
+
+AUR 包面向 Arch Linux，目前支持 `x86_64` 和 `aarch64`。Android 二进制通过 GitHub Releases 发布，不放入 AUR 包。
 
 Windows 还会额外提供独立可执行文件：
 

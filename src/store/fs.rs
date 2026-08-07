@@ -54,7 +54,10 @@ pub(super) fn launcher_name() -> &'static str {
 /// Resolve either a Gradle home or a launcher path to the canonical Gradle home.
 pub(super) fn resolve_gradle_home(path: &Path) -> Result<PathBuf> {
     if path.is_file() && path.file_name().is_some_and(|name| name == launcher_name()) {
-        let bin_dir = path
+        let launcher = path
+            .canonicalize()
+            .with_context(|| format!("canonicalize launcher {}", path.display()))?;
+        let bin_dir = launcher
             .parent()
             .ok_or_else(|| anyhow!("launcher path {} has no parent", path.display()))?;
         let home = bin_dir

@@ -52,6 +52,24 @@ jobs:
             rust_target: aarch64-unknown-linux-gnu
             install_command: ":"
             binary_name: gvm
+          - archive_target: android-aarch64
+            job_name: android-arm64
+            runs_on: ubuntu-24.04
+            rust_target: aarch64-linux-android
+            android_triple: aarch64-linux-android
+            android_api: 21
+            platform: android
+            install_command: ":"
+            binary_name: gvm
+          - archive_target: android-x86_64
+            job_name: android-x64
+            runs_on: ubuntu-24.04
+            rust_target: x86_64-linux-android
+            android_triple: x86_64-linux-android
+            android_api: 21
+            platform: android
+            install_command: ":"
+            binary_name: gvm
           - archive_target: darwin-x86_64
             job_name: macos-x64
             runs_on: macos-15-intel
@@ -93,6 +111,35 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust_target }}
+
+      - name: Set up Android SDK
+        if: ${{ matrix.platform == 'android' }}
+        uses: android-actions/setup-android@v3
+
+      - name: Configure Android NDK
+        if: ${{ matrix.platform == 'android' }}
+        env:
+          ANDROID_NDK_VERSION: 27.2.12479018
+        run: |
+          sdkmanager --install "ndk;${ANDROID_NDK_VERSION}"
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "${sdk_root}" ]; then
+            echo "Android SDK root is not configured" >&2
+            exit 1
+          fi
+          ndk_root="${sdk_root}/ndk/${ANDROID_NDK_VERSION}"
+          toolchain_dir="${ndk_root}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          linker="${toolchain_dir}/${{ matrix.android_triple }}${{ matrix.android_api }}-clang"
+          if [ ! -x "${linker}" ]; then
+            echo "Android linker not found: ${linker}" >&2
+            exit 1
+          fi
+          target_key="$(printf '%s' '${{ matrix.rust_target }}' | tr '[:lower:]-' '[:upper:]_')"
+          echo "ANDROID_NDK_HOME=${ndk_root}" >> "${GITHUB_ENV}"
+          echo "${toolchain_dir}" >> "${GITHUB_PATH}"
+          echo "CARGO_TARGET_${target_key}_LINKER=${linker}" >> "${GITHUB_ENV}"
+          echo "CC_${target_key}=${linker}" >> "${GITHUB_ENV}"
+          echo "AR_${target_key}=${toolchain_dir}/llvm-ar" >> "${GITHUB_ENV}"
 
       - name: Install system dependencies
         run: ${{ matrix.install_command }}
@@ -224,6 +271,8 @@ jobs:
                   "",
                   "- linux-x86_64",
                   "- linux-aarch64",
+                  "- android-x86_64",
+                  "- android-aarch64",
                   "- darwin-x86_64",
                   "- darwin-aarch64",
                   "- windows-x86_64",
@@ -284,6 +333,10 @@ jobs:
               f"gvm-{version}-linux-x86_64.tar.gz.sha256",
               f"gvm-{version}-linux-aarch64.tar.gz",
               f"gvm-{version}-linux-aarch64.tar.gz.sha256",
+              f"gvm-{version}-android-x86_64.tar.gz",
+              f"gvm-{version}-android-x86_64.tar.gz.sha256",
+              f"gvm-{version}-android-aarch64.tar.gz",
+              f"gvm-{version}-android-aarch64.tar.gz.sha256",
               f"gvm-{version}-darwin-x86_64.tar.gz",
               f"gvm-{version}-darwin-x86_64.tar.gz.sha256",
               f"gvm-{version}-darwin-aarch64.tar.gz",

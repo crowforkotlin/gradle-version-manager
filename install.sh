@@ -60,7 +60,14 @@ resolve_platform() {
   arch=$(uname -m)
 
   case "$os" in
-    Linux) platform_os=linux ;;
+    Linux)
+      kernel=$(uname -o 2>/dev/null || true)
+      if [ "$kernel" = "Android" ] || [ -n "${ANDROID_ROOT:-}" ] || [ -n "${ANDROID_DATA:-}" ]; then
+        platform_os=android
+      else
+        platform_os=linux
+      fi
+      ;;
     Darwin) platform_os=darwin ;;
     MINGW*|MSYS*|CYGWIN*) platform_os=windows ;;
     *)

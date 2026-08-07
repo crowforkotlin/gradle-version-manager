@@ -4,7 +4,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use super::Store;
-use super::fs::{LinkKind, clean_wrapper_cache, launcher_name, replace_link, unzip_archive};
+use super::fs::{
+    LinkKind, clean_wrapper_cache, launcher_name, replace_link, resolve_gradle_home, unzip_archive,
+};
 use super::remote::{
     InstallRequest, RemoteRelease, distribution_checksum_url, distribution_url,
     parse_install_request, select_latest_stable_release,
@@ -264,6 +266,38 @@ fn scan_wrapper_dists_finds_gradle_homes() {
     assert_eq!(detected[0].source, DetectionSource::WrapperDists);
     assert_eq!(detected[0].version, "8.13");
     assert_eq!(detected[0].home, gradle_home.canonicalize().unwrap());
+}
+
+#[cfg(unix)]
+#[test]
+fn resolve_gradle_home_follows_launcher_symlink() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = external_gradle_home(temp.path(), "8.13");
+    let launcher = temp.path().join("bin").join(launcher_name());
+    fs::create_dir_all(&launcher.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(home.join("bin").join(launcher_name()), &launcher).unwrap();
+
+    assert_eq!(
+        resolve_gradle_home(&launcher).unwrap(),
+        home.canonicalize().unwrap()
+    );
+}
+
+#[test]
+fn invalid_detection_candidates_are_ignored() {
+    let home = tempfile::tempdir().unwrap();
+    let store = test_store(home.path());
+    let managed_homes = store.managed_homes().unwrap();
+    let mut detected = BTreeMap::new();
+
+    super::register_detected_home(
+        home.path().join("missing-gradle"),
+        DetectionSource::Environment,
+        &managed_homes,
+        &mut detected,
+    );
+
+    assert!(detected.is_empty());
 }
 
 #[test]

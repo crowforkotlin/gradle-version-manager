@@ -60,6 +60,7 @@ export PATH="$HOME/.local/bin:$HOME/.gvm/bin:$PATH"
 ```
 
 `install.sh` is a POSIX `sh` script and can run on Linux, macOS, and Git Bash.
+Android builds are published as separate release assets for Termux or another Android shell environment.
 
 ## Quick start
 
@@ -142,10 +143,14 @@ Current release archives are published for:
 
 - `linux-x86_64`
 - `linux-aarch64`
+- `android-x86_64`
+- `android-aarch64`
 - `darwin-x86_64`
 - `darwin-aarch64`
 - `windows-x86_64`
 - `windows-aarch64`
+
+The AUR package is for Arch Linux and currently supports `x86_64` and `aarch64`. Android binaries are distributed through GitHub Releases instead of AUR.
 
 Windows releases also include standalone executables:
 
