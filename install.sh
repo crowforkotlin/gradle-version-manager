@@ -6,14 +6,12 @@ usage() {
 Install gvm from a local binary or a release asset.
 
 Usage:
+  curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- [--activate]
   ./install.sh [--activate]
   ./install.sh --from ./target/release/gvm [--activate]
   ./install.sh --url <release-tarball-or-binary-url> [--activate]
   curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
   sh install.sh --activate
-
-Pipe form:
-  curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- [--activate]
 
 Options:
   --from <path>         Install from an existing local gvm binary.
