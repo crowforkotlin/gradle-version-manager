@@ -17,10 +17,9 @@
 ### Quick install with curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | sh -s -- --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
+sh install.sh --activate
 ```
-
-`install.sh` detects the latest release and selects the matching archive for the current OS and architecture automatically.
 
 ### Install from a release archive
 
@@ -49,8 +48,8 @@ cargo build --release
 ### Pin a specific release
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | \
-  GVM_RELEASE_TAG=release-1.0.0 sh -s -- --activate
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh -o install.sh
+GVM_RELEASE_TAG=release-1.0.2 sh install.sh --activate
 ```
 
 `install.sh --activate` adds the required `PATH` entry to one shell startup file:
