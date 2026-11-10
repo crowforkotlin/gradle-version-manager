@@ -1,6 +1,6 @@
 [package]
 name = "gvm"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 description = "A small Rust-based Gradle version manager"
 license = "MIT"

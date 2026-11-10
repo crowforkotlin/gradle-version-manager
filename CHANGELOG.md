@@ -4,7 +4,7 @@ All notable changes to gvm are recorded here. Release bodies are generated from
 this file, so a release needs a non-empty `## <version>` or `## Unreleased`
 section before it can be published.
 
-## Unreleased
+## 1.0.3
 
 - Add `gvm cache list` and `gvm cache clean` to inspect and delete Gradle caches
   under the Gradle user home. Deletion is per area, per Gradle version, or

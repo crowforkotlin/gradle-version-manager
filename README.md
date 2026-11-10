@@ -48,7 +48,7 @@ cargo build --release
 ### Pin a specific release
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.2 bash
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.3 bash
 ```
 
 Activation asks whether to update `~/.bashrc`, `~/.zshrc`, or no file. `install.sh --rc-file <path>` can select a file directly. The required `PATH` entry is:

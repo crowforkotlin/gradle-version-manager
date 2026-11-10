@@ -48,7 +48,7 @@ cargo build --release
 ### 固定某个 release
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.2 bash
+curl -fsSL https://raw.githubusercontent.com/crowforkotlin/gradle-version-manager/main/install.sh | GVM_RELEASE_TAG=release-1.0.3 bash
 ```
 
 激活时会询问修改 `~/.bashrc`、`~/.zshrc`，还是不修改文件。也可以通过 `install.sh --rc-file <path>` 直接指定文件。需要追加的 `PATH` 内容是：
