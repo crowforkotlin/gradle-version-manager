@@ -1,8 +1,12 @@
+mod cache;
 mod fs;
+mod process;
+mod projects;
 mod remote;
 #[cfg(test)]
 mod tests;
 mod types;
+mod update;
 mod version;
 
 use std::collections::BTreeMap;
@@ -17,7 +21,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use reqwest::StatusCode;
 use reqwest::blocking::Client;
-use reqwest::header::RANGE;
+use reqwest::header::{RANGE, USER_AGENT};
 use serde::Deserialize;
 
 use self::fs::{
@@ -30,12 +34,21 @@ use self::remote::{
     RemoteRelease, ResolvedInstall, distribution_checksum_url, distribution_url,
     parse_install_request, select_latest_stable_release,
 };
+use self::update::{CURRENT_VERSION, check_for_update, release_target};
 use self::version::{compare_versions, normalize_version, sanitize_version, version_major};
 
-pub use self::types::{
-    AddMode, AddStatus, CleanSummary, DetectedVersion, DetectionSource, InstallStatus,
-    ListRemoteOptions, ManagedVersion, ReleaseChannel, RemoteVersionInfo, RemoveStatus,
+pub use self::cache::{
+    apply_cache_clean, cache_entries, cache_entries_in, plan_cache_clean, plan_cache_clean_in,
 };
+pub use self::process::stop_daemons;
+pub use self::projects::scan_projects;
+pub use self::types::{
+    AddMode, AddStatus, CacheCleanOptions, CacheCleanSummary, CacheEntry, CacheSelector,
+    CleanSummary, DaemonKind, DetectedVersion, DetectionSource, InstallStatus, ListRemoteOptions,
+    ManagedVersion, ProjectScanOptions, ProjectUsage, ReleaseChannel, RemoteVersionInfo,
+    RemoveStatus, StopSummary, UpdateCheck,
+};
+pub use self::update::DEFAULT_REPOSITORY;
 
 const VERSION_SERVICE_ROOT: &str = "https://services.gradle.org/versions";
 
@@ -389,6 +402,64 @@ impl Store {
         Ok(resolved
             .file_name()
             .map(|component| component.to_string_lossy().into_owned()))
+    }
+
+    /// Resolve the latest GitHub release and select the archive for this platform.
+    ///
+    /// The release tag comes from the `releases/latest` redirect instead of the
+    /// REST API, so an anonymous install never runs into the 60-request API limit.
+    pub fn check_update(&self) -> Result<UpdateCheck> {
+        let url = format!("https://github.com/{DEFAULT_REPOSITORY}/releases/latest");
+        let response = self
+            .client
+            .get(&url)
+            .header(USER_AGENT, format!("gvm/{CURRENT_VERSION}"))
+            .send()
+            .with_context(|| format!("resolve the latest release from {url}"))?;
+        let final_url = response.url().to_string();
+        if !response.status().is_success() && !response.status().is_redirection() {
+            bail!(
+                "resolve the latest release from {url}: unexpected status {}",
+                response.status()
+            );
+        }
+
+        let tag = update::tag_from_release_url(&final_url).ok_or_else(|| {
+            anyhow!("{url} did not redirect to a release tag (resolved to {final_url})")
+        })?;
+
+        check_for_update(CURRENT_VERSION, DEFAULT_REPOSITORY, &tag, release_target()?)
+    }
+
+    /// Download, verify, and install the archive described by `check`.
+    pub fn apply_update(&self, check: &UpdateCheck) -> Result<PathBuf> {
+        let install_path = update::current_executable()?;
+
+        let bytes = self.download_bytes(&check.download_url)?;
+        let checksum = update::checksum_from_bytes(&self.download_bytes(&check.checksum_url)?);
+        update::verify_download(&bytes, &checksum, &check.asset_name)?;
+        update::install_archive(&bytes, &check.asset_name, &install_path)?;
+
+        Ok(install_path)
+    }
+
+    fn download_bytes(&self, url: &str) -> Result<Vec<u8>> {
+        let response = self
+            .client
+            .get(url)
+            .header(USER_AGENT, format!("gvm/{CURRENT_VERSION}"))
+            .send()
+            .with_context(|| format!("download {url}"))?;
+        if response.status() != StatusCode::OK {
+            bail!("download {url}: unexpected status {}", response.status());
+        }
+
+        let mut buffer = Vec::new();
+        let mut reader = BufReader::new(response);
+        reader
+            .read_to_end(&mut buffer)
+            .with_context(|| format!("read response body from {url}"))?;
+        Ok(buffer)
     }
 
     fn ensure_layout(&self) -> Result<()> {

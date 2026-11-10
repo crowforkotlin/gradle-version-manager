@@ -104,6 +104,87 @@ gvm add --link /opt/gradle-8.13
 | `gvm current` | Print the selected version |
 | `gvm remove <version> [--force]` | Remove a managed version |
 | `gvm clean [--wrapper-cache\|--all]` | Clean `~/.gvm/tmp`, broken links, and optional Wrapper remnants |
+| `gvm cache list [--home <dir>]` | Show removable Gradle caches with sizes and file counts |
+| `gvm cache clean [--selector <area>]` | Delete selected Gradle caches; asks for confirmation first |
+| `gvm stop [--kind gradle,kotlin] [--dry-run]` | Terminate running Gradle daemons and Kotlin compile daemons |
+| `gvm projects [<path>...] [--depth N]` | List projects and the Gradle versions they use |
+| `gvm update [--check]` | Replace the running binary with the latest release |
+
+## Gradle cache management
+
+`gvm cache list` is read-only. It measures the removable areas under the Gradle
+user home (`~/.gradle` unless `GRADLE_USER_HOME` is set):
+
+```bash
+gvm cache list
+```
+
+```text
+AREA                 SIZE    FILES  PATH
+modules           4.9 GiB    18234  /home/you/.gradle/caches/modules-2
+transforms        1.2 GiB     9042  /home/you/.gradle/caches/transforms-4
+build-cache     912.4 MiB     1201  /home/you/.gradle/caches/build-cache-1
+```
+
+Deletion always prints the exact paths, file counts, and sizes, then asks
+`Delete these caches and <size> of data? [y/N]`:
+
+```bash
+gvm cache clean --selector modules,build-cache
+gvm cache clean --version 8.13
+gvm cache clean --all --dry-run
+```
+
+`--selector` accepts `version`, `modules`, `jars`, `transforms`, `build-cache`,
+`journal`, `kotlin-dsl`, `daemon-logs`, and `wrapper-dists`. A run that neither
+selects an area nor passes `--version`/`--all` is rejected. When stdin is not a
+terminal, deletion requires `--yes`; without it gvm exits with an error and
+deletes nothing. `daemon-logs` removes only `*.log` files.
+
+Deleted caches are not recoverable: Gradle re-downloads dependencies and rebuilds
+transformed artifacts on the next build.
+
+## Stopping Gradle processes
+
+```bash
+gvm stop --dry-run
+gvm stop --kind gradle
+```
+
+`gvm stop` finds processes whose command line contains
+`org.gradle.launcher.daemon.bootstrap.GradleDaemon` or
+`org.jetbrains.kotlin.daemon.KotlinCompileDaemon`, sends `SIGTERM`, waits, then
+sends `SIGKILL` to survivors. On Windows it uses `taskkill /T /F`.
+
+## Project version report
+
+```bash
+gvm projects ~/code --depth 4
+```
+
+```text
+8.13         8.13                    /home/you/code/service-a
+-            9.3.0,9.5.0             /home/you/code/libs/build-logic
+```
+
+The first column is the `distributionUrl` version in
+`gradle/wrapper/gradle-wrapper.properties`; the second column lists the
+directories under the project's `.gradle/`, which record versions that have run
+there. The scan skips `.git`, `build`, `target`, `node_modules`, and similar
+directories.
+
+## Self update
+
+```bash
+gvm update --check
+gvm update
+```
+
+`gvm update` resolves the latest tag from
+`https://github.com/crowforkotlin/gradle-version-manager/releases/latest`,
+downloads `gvm-<version>-<target>.tar.gz` (or the `.exe` on Windows), verifies
+its `.sha256`, and replaces the running binary after confirmation. `--check`
+only reports the available version.
 
 ## Remote version aliases
 
@@ -134,6 +215,13 @@ gvm add --link /opt/gradle-8.13
 - `gvm add` copies by default so cleaning Wrapper caches or SDKMAN does not break managed versions.
 - `gvm remove` deletes copied installs and removes only the gvm-side symlink for `gvm add --link`.
 - `gvm clean` removes transient files from `~/.gvm/tmp` and can also remove partial Wrapper cache files such as `.part` and `.lck`.
+
+## Release notes
+
+`CHANGELOG.md` is the source of release notes. `.github/workflows/release.yml`
+renders the body for `release-<version>` with `scripts/release-notes.sh`, which
+reads the `## <version>` section and falls back to `## Unreleased`. A release
+fails when both sections are empty.
 
 ## Release assets
 

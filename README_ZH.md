@@ -104,6 +104,85 @@ gvm add --link /opt/gradle-8.13
 | `gvm current` | 输出当前选中的版本 |
 | `gvm remove <version> [--force]` | 移除一个受管版本 |
 | `gvm clean [--wrapper-cache\|--all]` | 清理 `~/.gvm/tmp`、坏链接和可选的 Wrapper 残留 |
+| `gvm cache list [--home <dir>]` | 列出可清理的 Gradle 缓存及其大小、文件数 |
+| `gvm cache clean [--selector <area>]` | 删除选定的 Gradle 缓存，删除前要求确认 |
+| `gvm stop [--kind gradle,kotlin] [--dry-run]` | 结束正在运行的 Gradle Daemon 和 Kotlin 编译 Daemon |
+| `gvm projects [<path>...] [--depth N]` | 列出项目及其使用的 Gradle 版本 |
+| `gvm update [--check]` | 用最新 release 替换当前运行的二进制 |
+
+## Gradle 缓存管理
+
+`gvm cache list` 只读，不会删除任何文件。它统计 Gradle 用户目录（默认
+`~/.gradle`，设置了 `GRADLE_USER_HOME` 时使用该值）下可清理的区域：
+
+```bash
+gvm cache list
+```
+
+```text
+AREA                 SIZE    FILES  PATH
+modules           4.9 GiB    18234  /home/you/.gradle/caches/modules-2
+transforms        1.2 GiB     9042  /home/you/.gradle/caches/transforms-4
+build-cache     912.4 MiB     1201  /home/you/.gradle/caches/build-cache-1
+```
+
+删除前会先列出将要删除的完整路径、文件数和大小，然后询问
+`Delete these caches and <size> of data? [y/N]`：
+
+```bash
+gvm cache clean --selector modules,build-cache
+gvm cache clean --version 8.13
+gvm cache clean --all --dry-run
+```
+
+`--selector` 接受 `version`、`modules`、`jars`、`transforms`、`build-cache`、
+`journal`、`kotlin-dsl`、`daemon-logs`、`wrapper-dists`。既没有 `--selector`，
+也没有 `--version`/`--all` 时命令直接报错，不删除任何内容。stdin 不是终端时
+必须显式传 `--yes`，否则命令报错退出且不删除文件。`daemon-logs` 只删除
+`*.log` 文件。
+
+被删除的缓存无法恢复：下一次构建时 Gradle 会重新下载依赖并重建
+transforms 产物。
+
+## 结束 Gradle 进程
+
+```bash
+gvm stop --dry-run
+gvm stop --kind gradle
+```
+
+`gvm stop` 查找命令行中包含
+`org.gradle.launcher.daemon.bootstrap.GradleDaemon` 或
+`org.jetbrains.kotlin.daemon.KotlinCompileDaemon` 的进程，先发送 `SIGTERM`，
+等待后再对仍然存活的进程发送 `SIGKILL`。Windows 上使用 `taskkill /T /F`。
+
+## 项目版本报告
+
+```bash
+gvm projects ~/code --depth 4
+```
+
+```text
+8.13         8.13                    /home/you/code/service-a
+-            9.3.0,9.5.0             /home/you/code/libs/build-logic
+```
+
+第一列是 `gradle/wrapper/gradle-wrapper.properties` 中 `distributionUrl` 的版本；
+第二列是项目 `.gradle/` 下记录运行过的版本目录。扫描会跳过 `.git`、`build`、
+`target`、`node_modules` 等目录。
+
+## 自更新
+
+```bash
+gvm update --check
+gvm update
+```
+
+`gvm update` 通过
+`https://github.com/crowforkotlin/gradle-version-manager/releases/latest`
+的跳转结果确定最新版本号，下载 `gvm-<version>-<target>.tar.gz`（Windows 上是
+`.exe`），校验同名 `.sha256`，确认后替换当前运行的二进制。`--check` 只报告
+可用版本，不做替换。
 
 ## 远程版本别名
 
@@ -134,6 +213,12 @@ gvm add --link /opt/gradle-8.13
 - `gvm add` 默认复制，这样清理 Wrapper 缓存或 SDKMAN 后不会影响受管版本。
 - `gvm remove` 会删除复制安装的版本；对 `gvm add --link` 只删除 gvm 自己的软链接。
 - `gvm clean` 会清理 `~/.gvm/tmp`，也可以额外清理 Wrapper 里的 `.part`、`.lck` 等残留。
+
+## Release 说明
+
+Release 说明以 `CHANGELOG.md` 为准。`.github/workflows/release.yml` 通过
+`scripts/release-notes.sh` 读取 `## <version>` 段落生成 `release-<version>`
+的说明内容，该段落为空时回退到 `## Unreleased`；两者都为空时发布失败。
 
 ## Release 产物
 

@@ -8,9 +8,11 @@ license = "MIT"
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.51", features = ["derive"] }
+flate2 = "1.1.9"
 indicatif = "0.17.11"
 reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1.0.228", features = ["derive"] }
 sha2 = "0.10.9"
+tar = { version = "0.4.44", default-features = false }
 tempfile = "3.23.0"
 zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
