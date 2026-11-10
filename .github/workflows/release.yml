@@ -112,20 +112,30 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
-      - name: Set up Android SDK
-        if: ${{ matrix.platform == 'android' }}
-        uses: android-actions/setup-android@v3
-
       - name: Configure Android NDK
         if: ${{ matrix.platform == 'android' }}
         env:
           ANDROID_NDK_VERSION: 27.2.12479018
         run: |
-          sdkmanager --install "ndk;${ANDROID_NDK_VERSION}"
-          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
-          if [ -z "${sdk_root}" ]; then
-            echo "Android SDK root is not configured" >&2
+          # The runner image ships the Android SDK; installing the legacy `tools`
+          # package through android-actions/setup-android fails because Google
+          # removed it from the repository.
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "${sdk_root}" ]; then
+            echo "Android SDK root not found at ${sdk_root}" >&2
             exit 1
+          fi
+          sdkmanager="$(command -v sdkmanager || true)"
+          if [ -z "${sdkmanager}" ]; then
+            sdkmanager="$(ls -d "${sdk_root}"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -n 1)"
+          fi
+          if [ ! -x "${sdkmanager}" ]; then
+            echo "sdkmanager not found under ${sdk_root}" >&2
+            exit 1
+          fi
+          if [ ! -d "${sdk_root}/ndk/${ANDROID_NDK_VERSION}" ]; then
+            yes | "${sdkmanager}" --licenses >/dev/null 2>&1 || true
+            "${sdkmanager}" --install "ndk;${ANDROID_NDK_VERSION}"
           fi
           ndk_root="${sdk_root}/ndk/${ANDROID_NDK_VERSION}"
           toolchain_dir="${ndk_root}/toolchains/llvm/prebuilt/linux-x86_64/bin"
